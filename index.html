@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="유아와 초보자를 위한 동요 피아노 계이름 연습 앱"
+    />
+    <title>꼬마 피아노 연습실</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">동요 계이름 피아노</p>
+          <h1>꼬마 피아노 연습실</h1>
+        </div>
+        <div class="stats" aria-label="연습 현황">
+          <div>
+            <span id="scoreCount">0</span>
+            <small>성공</small>
+          </div>
+          <div>
+            <span id="streakCount">0</span>
+            <small>연속</small>
+          </div>
+          <div>
+            <span id="levelLabel">1</span>
+            <small>단계</small>
+          </div>
+        </div>
+      </header>
+
+      <section class="practice-hero" aria-label="현재 연습">
+        <div class="lesson-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">오늘의 연습</p>
+              <h2 id="currentSongTitle">작은 별</h2>
+            </div>
+            <button class="ghost-button" id="resetProgressButton" type="button">
+              초기화
+            </button>
+          </div>
+
+          <div class="prompt-card" id="promptCard">
+            <div class="prompt-meta">
+              <span id="handBadge" class="badge right">오른손</span>
+              <span id="fingerBadge" class="badge neutral">1번 엄지</span>
+              <span id="beatBadge" class="badge neutral">1박</span>
+            </div>
+            <div id="targetNotes" class="target-notes" aria-live="polite"></div>
+            <p id="coachText" class="coach-text">
+              아래 피아노에서 같은 계이름을 눌러보세요.
+            </p>
+            <div class="progress-track" aria-label="연습 진행률">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button class="primary-button" id="playGuideButton" type="button">
+              듣기
+            </button>
+            <button class="secondary-button" id="repeatButton" type="button">
+              다시
+            </button>
+            <button class="secondary-button" id="nextButton" type="button">
+              다음
+            </button>
+            <button class="secondary-button" id="micButton" type="button">
+              마이크
+            </button>
+            <button class="secondary-button" id="midiButton" type="button">
+              MIDI
+            </button>
+          </div>
+
+          <div class="input-feedback">
+            <div>
+              <strong>실제 피아노 판정</strong>
+              <span id="listenStatus">마이크나 MIDI를 켜면 연주음을 듣고 맞춰봅니다.</span>
+            </div>
+            <div id="detectedNote" class="detected-note">--</div>
+          </div>
+        </div>
+
+        <div class="song-panel">
+          <div class="section-title">
+            <p class="eyebrow">동요 선택</p>
+            <h2>쉬운 멜로디</h2>
+          </div>
+          <div class="song-list" id="songList"></div>
+        </div>
+      </section>
+
+      <section class="piano-section" aria-label="피아노 건반">
+        <div class="keyboard-toolbar">
+          <div>
+            <p class="eyebrow">직접 쳐보기</p>
+            <h2>피아노 건반</h2>
+          </div>
+          <label class="tempo-control" for="tempoSlider">
+            <span>빠르기</span>
+            <input id="tempoSlider" type="range" min="60" max="132" value="88" />
+            <strong id="tempoValue">88</strong>
+          </label>
+        </div>
+        <div class="keyboard-scroll">
+          <div id="keyboard" class="keyboard" aria-label="화면 피아노"></div>
+        </div>
+        <div class="stage-panel" aria-label="움직이는 악보">
+          <div class="stage-head">
+            <div>
+              <p class="eyebrow">연습 스테이지</p>
+              <h2>듣고 배우고 연주하기</h2>
+            </div>
+            <div class="stage-tabs" role="tablist" aria-label="연습 모드">
+              <button type="button" data-stage-mode="listen">듣기</button>
+              <button type="button" data-stage-mode="teach">배우기</button>
+              <button type="button" data-stage-mode="play">연주</button>
+            </div>
+          </div>
+          <div class="sheet-window">
+            <div class="play-cursor" aria-hidden="true"></div>
+            <div id="sheetTrack" class="sheet-track"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="learning-grid" aria-label="학습 설정">
+        <div class="level-panel">
+          <div class="section-title">
+            <p class="eyebrow">단계별 성장</p>
+            <h2>초보에서 중급까지</h2>
+          </div>
+          <div class="level-list" id="levelList"></div>
+        </div>
+
+        <div class="finger-panel">
+          <div class="section-title">
+            <p class="eyebrow">손가락 번호</p>
+            <h2>오른손과 왼손</h2>
+          </div>
+          <div class="finger-guide">
+            <div>
+              <strong>오른손</strong>
+              <span>1 엄지</span>
+              <span>2 검지</span>
+              <span>3 중지</span>
+              <span>4 약지</span>
+              <span>5 새끼</span>
+            </div>
+            <div>
+              <strong>왼손</strong>
+              <span>1 엄지</span>
+              <span>2 검지</span>
+              <span>3 중지</span>
+              <span>4 약지</span>
+              <span>5 새끼</span>
+            </div>
+          </div>
+          <div id="sequencePreview" class="sequence-preview"></div>
+        </div>
+      </section>
+
+      <section class="mission-panel" aria-label="오늘의 연습 미션">
+        <div class="section-title">
+          <p class="eyebrow">5분 루틴</p>
+          <h2>오늘의 짧은 연습</h2>
+        </div>
+        <div id="missionList" class="mission-list"></div>
+      </section>
+
+      <section class="composer-panel" aria-label="계이름 생성">
+        <div class="section-title">
+          <p class="eyebrow">계이름 만들기</p>
+          <h2>동요 이름이나 악보 입력</h2>
+        </div>
+        <div class="composer-grid">
+          <div class="composer-form">
+            <label for="customTitle">동요 이름</label>
+            <input
+              id="customTitle"
+              type="text"
+              placeholder="예: 작은별, 나비야, C D E F G"
+            />
+            <label for="customScore">악보 입력</label>
+            <textarea
+              id="customScore"
+              rows="6"
+              placeholder="예: 도 도 솔 솔 라 라 솔 | 파 파 미 미 레 레 도&#10;또는 C4 C4 G4 G4 A4 A4 G4"
+            ></textarea>
+            <div class="composer-actions">
+              <button class="primary-button" id="generateButton" type="button">
+                계이름 생성
+              </button>
+              <button class="secondary-button" id="loadExampleButton" type="button">
+                예시 넣기
+              </button>
+            </div>
+          </div>
+          <div class="composer-result">
+            <strong>생성된 계이름</strong>
+            <p id="customHint">
+              한글 계이름, Do Re Mi, C D E 표기를 모두 읽을 수 있습니다.
+              마디는 | 로 나눕니다.
+            </p>
+            <div id="generatedNotes" class="generated-notes"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
