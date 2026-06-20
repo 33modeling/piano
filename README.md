@@ -37,3 +37,18 @@ python3 -m http.server 4173
 ```
 
 그 다음 `http://localhost:4173`에 접속합니다.
+
+## Android APK 빌드
+
+Android 프로젝트는 `android/` 폴더에 있습니다. 로컬 서명 설정은 `android/keystore.properties`와 keystore 파일을 사용하며, 두 파일은 git에 포함하지 않습니다.
+
+```bash
+cd android
+JAVA_HOME=/home/kms/.local/jdk21 PATH=/home/kms/.local/jdk21/bin:$PATH ./gradlew assembleRelease
+```
+
+생성 APK:
+
+```text
+android/app/build/outputs/apk/release/app-release.apk
+```
