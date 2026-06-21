@@ -274,6 +274,9 @@ const state = {
   recognitionLockUntil: 0,
   stageMode: "teach",
   customSong: null,
+  reviewSong: null,
+  mistakes: {},
+  focusMode: false,
 };
 
 const elements = {
@@ -288,6 +291,9 @@ const elements = {
   coachText: document.querySelector("#coachText"),
   progressFill: document.querySelector("#progressFill"),
   promptCard: document.querySelector("#promptCard"),
+  nextSuggestion: document.querySelector("#nextSuggestion"),
+  quickStartButton: document.querySelector("#quickStartButton"),
+  focusModeButton: document.querySelector("#focusModeButton"),
   playGuideButton: document.querySelector("#playGuideButton"),
   repeatButton: document.querySelector("#repeatButton"),
   nextButton: document.querySelector("#nextButton"),
@@ -304,6 +310,9 @@ const elements = {
   sequencePreview: document.querySelector("#sequencePreview"),
   sheetTrack: document.querySelector("#sheetTrack"),
   missionList: document.querySelector("#missionList"),
+  mistakeList: document.querySelector("#mistakeList"),
+  mistakePracticeButton: document.querySelector("#mistakePracticeButton"),
+  clearMistakesButton: document.querySelector("#clearMistakesButton"),
   customTitle: document.querySelector("#customTitle"),
   customScore: document.querySelector("#customScore"),
   generateButton: document.querySelector("#generateButton"),
@@ -343,6 +352,9 @@ function melody(source) {
 function getCurrentSong() {
   if (state.selectedSongId === "custom" && state.customSong) {
     return state.customSong;
+  }
+  if (state.selectedSongId === "review" && state.reviewSong) {
+    return state.reviewSong;
   }
   return songs.find((song) => song.id === state.selectedSongId) || songs[0];
 }
@@ -521,7 +533,9 @@ function loadCurrentSong(startIndex = 0) {
 }
 
 function renderSongs() {
-  const songItems = state.customSong ? [...songs, state.customSong] : songs;
+  const songItems = [...songs];
+  if (state.customSong) songItems.push(state.customSong);
+  if (state.reviewSong) songItems.push(state.reviewSong);
   elements.songList.innerHTML = songItems
     .map((song) => {
       const active = song.id === state.selectedSongId ? " active" : "";
@@ -571,6 +585,8 @@ function renderPractice() {
   elements.tempoSlider.value = state.tempo;
   elements.micButton.classList.toggle("active-input", state.micActive);
   elements.midiButton.classList.toggle("active-input", state.midiActive);
+  elements.focusModeButton.textContent = state.focusMode ? "전체 보기" : "큰 화면";
+  applyFocusMode();
 
   if (!current) {
     elements.targetNotes.innerHTML = "";
@@ -578,6 +594,8 @@ function renderPractice() {
     updateKeyHighlights();
     renderStageTrack();
     renderMissions();
+    renderMistakes();
+    renderSuggestion();
     return;
   }
 
@@ -607,6 +625,8 @@ function renderPractice() {
   updateKeyHighlights();
   renderStageTrack();
   renderMissions();
+  renderMistakes();
+  renderSuggestion();
 }
 
 function renderSequencePreview() {
@@ -735,6 +755,144 @@ function renderMissions() {
     .join("");
 }
 
+function getMistakeEntries() {
+  return Object.entries(state.mistakes)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([note, count]) => ({ note, count }));
+}
+
+function renderMistakes() {
+  const entries = getMistakeEntries().slice(0, 6);
+  if (!entries.length) {
+    elements.mistakeList.innerHTML = '<span class="empty-state">아직 어려운 음이 없어요.</span>';
+  } else {
+    elements.mistakeList.innerHTML = entries
+      .map(
+        ({ note, count }) => `
+          <span class="review-chip">${escapeHtml(plainSolfege(note))}<small>${count}</small></span>
+        `,
+      )
+      .join("");
+  }
+
+  elements.mistakePracticeButton.disabled = entries.length === 0;
+  elements.clearMistakesButton.disabled = entries.length === 0;
+}
+
+function renderSuggestion() {
+  const entries = getMistakeEntries();
+  const song = getCurrentSong();
+  const nextLevel = levels.find((item) => item.id === state.level + 1);
+
+  if (song.needsScore) {
+    elements.nextSuggestion.textContent = `${song.title} 악보를 넣으면 바로 연습할 수 있어요.`;
+    return;
+  }
+
+  if (entries.length) {
+    elements.nextSuggestion.textContent = `어려운 음 ${plainSolfege(entries[0].note)}부터 복습해요.`;
+    return;
+  }
+
+  if (state.streak >= 5 && nextLevel) {
+    elements.nextSuggestion.textContent = `${nextLevel.title} 단계로 넘어갈 준비가 됐어요.`;
+    return;
+  }
+
+  elements.nextSuggestion.textContent = `${song.title} ${state.level}단계를 이어서 연습해요.`;
+}
+
+function recordMistake(expectedNotes) {
+  [...new Set(expectedNotes)].forEach((note) => {
+    state.mistakes[note] = (state.mistakes[note] || 0) + 1;
+  });
+}
+
+function resolveMistake(note) {
+  if (!state.mistakes[note]) return;
+  state.mistakes[note] -= 1;
+  if (state.mistakes[note] <= 0) {
+    delete state.mistakes[note];
+  }
+}
+
+function clearMistakes() {
+  state.mistakes = {};
+  saveProgress();
+  renderMistakes();
+  renderSuggestion();
+}
+
+function buildReviewSong() {
+  const entries = getMistakeEntries().slice(0, 6);
+  if (!entries.length) return null;
+
+  const melodyItems = entries.flatMap(({ note }, entryIndex) =>
+    [0, 1].map((repeatIndex) => {
+      const index = entryIndex * 2 + repeatIndex;
+      return {
+        note,
+        duration: 1,
+        measure: Math.floor(index / 4) + 1,
+        beat: (index % 4) + 1,
+      };
+    }),
+  );
+
+  return {
+    id: "review",
+    title: "어려운 음 연습",
+    mark: "복",
+    range: buildRangeLabel(melodyItems),
+    key: "C",
+    description: "틀렸던 음만 모아 다시 연습해요.",
+    melody: melodyItems,
+  };
+}
+
+function startMistakePractice() {
+  const reviewSong = buildReviewSong();
+  if (!reviewSong) return;
+
+  state.reviewSong = reviewSong;
+  state.selectedSongId = "review";
+  state.currentIndex = 0;
+  state.stageMode = "teach";
+  loadCurrentSong();
+  saveProgress();
+  document.querySelector(".lesson-panel")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+function quickStart() {
+  if (getMistakeEntries().length) {
+    startMistakePractice();
+    return;
+  }
+
+  if (state.streak >= 5 && state.level < levels.length) {
+    state.level += 1;
+    state.currentIndex = 0;
+    loadCurrentSong();
+  } else {
+    restartStep();
+  }
+
+  saveProgress();
+  document.querySelector(".lesson-panel")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+function applyFocusMode() {
+  document.body?.classList.toggle("focus-mode", state.focusMode);
+}
+
+function toggleFocusMode() {
+  state.focusMode = !state.focusMode;
+  applyFocusMode();
+  renderPractice();
+  saveProgress();
+}
+
 function updateKeyHighlights() {
   const expected = new Set(state.pendingNotes);
   document.querySelectorAll("[data-note]").forEach((key) => {
@@ -817,6 +975,7 @@ function judgeNote(note) {
   if (state.pendingNotes.has(note)) {
     state.pendingNotes.delete(note);
     state.completedNotes.add(note);
+    resolveMistake(note);
     elements.promptCard.classList.remove("miss");
     elements.promptCard.classList.add("correct");
     window.setTimeout(() => elements.promptCard.classList.remove("correct"), 340);
@@ -834,6 +993,7 @@ function judgeNote(note) {
 
   if (!expected.includes(note)) {
     state.streak = 0;
+    recordMistake(state.pendingNotes.size ? [...state.pendingNotes] : expected);
     elements.coachText.textContent = `이번에는 ${expected.map(plainSolfege).join(", ")}을 눌러볼까요?`;
     elements.promptCard.classList.remove("correct");
     elements.promptCard.classList.add("miss");
@@ -1181,6 +1341,9 @@ function saveProgress() {
     tempo: state.tempo,
     stageMode: state.stageMode,
     customSong: state.customSong,
+    reviewSong: state.reviewSong,
+    mistakes: state.mistakes,
+    focusMode: state.focusMode,
   };
   localStorage.setItem("little-piano-progress", JSON.stringify(progress));
 }
@@ -1198,6 +1361,9 @@ function loadProgress() {
     state.tempo = progress.tempo || 88;
     state.stageMode = progress.stageMode || "teach";
     state.customSong = progress.customSong || null;
+    state.reviewSong = progress.reviewSong || null;
+    state.mistakes = progress.mistakes || {};
+    state.focusMode = Boolean(progress.focusMode);
   } catch {
     localStorage.removeItem("little-piano-progress");
   }
@@ -1207,6 +1373,7 @@ function resetProgress() {
   state.score = 0;
   state.streak = 0;
   state.currentIndex = 0;
+  state.mistakes = {};
   resetPendingNotes();
   saveProgress();
   renderPractice();
@@ -1242,8 +1409,12 @@ function bindEvents() {
   elements.playGuideButton.addEventListener("click", playGuide);
   elements.repeatButton.addEventListener("click", restartStep);
   elements.nextButton.addEventListener("click", nextStep);
+  elements.quickStartButton.addEventListener("click", quickStart);
+  elements.focusModeButton.addEventListener("click", toggleFocusMode);
   elements.micButton.addEventListener("click", toggleMic);
   elements.midiButton.addEventListener("click", toggleMidi);
+  elements.mistakePracticeButton.addEventListener("click", startMistakePractice);
+  elements.clearMistakesButton.addEventListener("click", clearMistakes);
   elements.resetProgressButton.addEventListener("click", resetProgress);
   elements.generateButton.addEventListener("click", generateCustom);
   elements.loadExampleButton.addEventListener("click", loadExample);

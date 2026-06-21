@@ -130,6 +130,18 @@ globalThis.__pianoSmoke = (() => {
   assert.ok(songs.filter((song) => !song.needsScore).every((song) => song.melody.length > 0));
   assert.equal(buildSequence(songs[0], 1).length, songs[0].melody.length);
   assert.ok(buildSequence(songs[0], 5).some((step) => step.notes.length > 1));
+  recordMistake(["D4", "D4"]);
+  recordMistake(["F4"]);
+  assert.equal(state.mistakes.D4, 1);
+  assert.equal(state.mistakes.F4, 1);
+  resolveMistake("D4");
+  assert.equal(state.mistakes.D4, undefined);
+  recordMistake(["D4"]);
+  startMistakePractice();
+  assert.equal(state.selectedSongId, "review");
+  assert.ok(state.reviewSong.melody.some((item) => item.note === "D4"));
+  clearMistakes();
+  assert.equal(Object.keys(state.mistakes).length, 0);
 
   elements.customTitle.value = "<img src=x onerror=alert(1)>";
   elements.customScore.value = "도 레 미";

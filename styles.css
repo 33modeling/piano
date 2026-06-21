@@ -14,7 +14,7 @@
   --blue: #2676c7;
   --key-white: #fffdf9;
   --key-black: #23262d;
-  --shadow: 0 16px 40px rgba(32, 36, 42, 0.12);
+  --shadow: 0 8px 22px rgba(32, 36, 42, 0.08);
 }
 
 * {
@@ -31,9 +31,7 @@ body {
     "Noto Sans KR",
     system-ui,
     sans-serif;
-  background:
-    linear-gradient(180deg, rgba(157, 215, 255, 0.34), rgba(255, 255, 255, 0) 320px),
-    #fbfcfd;
+  background: #f7fafc;
 }
 
 button,
@@ -49,6 +47,8 @@ button {
 
 .app-shell {
   width: min(1180px, 100%);
+  display: flex;
+  flex-direction: column;
   margin: 0 auto;
   padding: 18px;
 }
@@ -76,7 +76,7 @@ h2 {
 }
 
 h1 {
-  font-size: 3.1rem;
+  font-size: 2.45rem;
 }
 
 h2 {
@@ -110,19 +110,27 @@ h2 {
   font-weight: 700;
 }
 
+.quick-panel,
 .practice-hero,
-.learning-grid,
 .composer-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   gap: 16px;
 }
 
+.quick-panel {
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr) minmax(240px, 0.85fr);
+  margin-bottom: 16px;
+}
+
 .lesson-panel,
-.song-panel,
+.control-panel,
+.quick-card,
+.mistake-panel,
 .level-panel,
 .finger-panel,
 .composer-panel,
+.mission-panel,
 .piano-section {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -131,12 +139,97 @@ h2 {
 }
 
 .lesson-panel,
-.song-panel,
+.control-panel,
+.quick-card,
+.mistake-panel,
 .level-panel,
 .finger-panel,
 .composer-panel,
+.mission-panel,
 .piano-section {
   padding: 16px;
+}
+
+.quick-card {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 144px;
+}
+
+.quick-card h2 {
+  margin-top: 4px;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.control-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  max-height: 690px;
+  overflow: auto;
+}
+
+.control-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.control-group summary {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.control-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-group summary::after {
+  content: "+";
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--blue);
+  background: #eef7ff;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.control-group[open] summary::after {
+  content: "-";
+}
+
+.control-group summary span {
+  display: block;
+  font-weight: 900;
+}
+
+.control-group summary small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.control-group > :not(summary) {
+  margin: 0 12px 12px;
+}
+
+.control-panel .composer-grid {
+  grid-template-columns: 1fr;
 }
 
 .panel-head,
@@ -279,6 +372,13 @@ h2 {
   font-weight: 900;
 }
 
+.primary-button:disabled,
+.secondary-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .primary-button {
   color: #fff;
   background: var(--blue);
@@ -341,6 +441,12 @@ h2 {
   gap: 10px;
 }
 
+.control-panel .song-list {
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .song-button,
 .level-button {
   width: 100%;
@@ -348,8 +454,8 @@ h2 {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  min-height: 70px;
-  padding: 12px;
+  min-height: 62px;
+  padding: 10px;
   color: var(--ink);
   background: var(--soft);
   border: 2px solid transparent;
@@ -365,8 +471,8 @@ h2 {
 
 .song-mark,
 .level-number {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -655,18 +761,13 @@ h2 {
 }
 
 .mission-panel {
-  margin: 16px 0;
-  padding: 16px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  margin: 0;
 }
 
 .mission-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .mission-card {
@@ -686,6 +787,46 @@ h2 {
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 800;
+}
+
+.mistake-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.mistake-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.review-chip,
+.empty-state {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.review-chip {
+  color: var(--ink);
+  background: #fff4d8;
+  border: 1px solid #f0cd79;
+}
+
+.review-chip small,
+.empty-state {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.empty-state {
+  background: var(--soft);
+  border: 1px dashed var(--line);
 }
 
 .mission-bar {
@@ -753,6 +894,30 @@ h2 {
   font-weight: 700;
 }
 
+body.focus-mode .quick-panel,
+body.focus-mode .control-panel {
+  display: none;
+}
+
+body.focus-mode .practice-hero {
+  grid-template-columns: 1fr;
+}
+
+body.focus-mode .lesson-panel,
+body.focus-mode .piano-section {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body.focus-mode .prompt-card {
+  min-height: 320px;
+}
+
+body.focus-mode .target-note strong {
+  font-size: 4.5rem;
+}
+
 @keyframes pop {
   0% {
     transform: scale(1);
@@ -779,8 +944,8 @@ h2 {
 }
 
 @media (max-width: 900px) {
+  .quick-panel,
   .practice-hero,
-  .learning-grid,
   .composer-grid {
     grid-template-columns: 1fr;
   }
@@ -806,6 +971,26 @@ h2 {
     grid-template-columns: repeat(3, 1fr);
   }
 
+  .practice-hero {
+    display: contents;
+  }
+
+  .lesson-panel {
+    order: 1;
+  }
+
+  .piano-section {
+    order: 2;
+  }
+
+  .quick-panel {
+    order: 3;
+  }
+
+  .control-panel {
+    order: 4;
+  }
+
   h1 {
     font-size: 2rem;
   }
@@ -816,6 +1001,15 @@ h2 {
 
   .song-list {
     grid-template-columns: 1fr;
+  }
+
+  .quick-panel {
+    gap: 10px;
+  }
+
+  .control-panel {
+    max-height: none;
+    overflow: visible;
   }
 
   .prompt-card {
