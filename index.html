@@ -52,6 +52,21 @@
             <h2>오늘의 짧은 연습</h2>
           </div>
           <div id="missionList" class="mission-list"></div>
+          <div class="daily-practice" aria-label="오늘 3분 연습">
+            <div class="daily-practice-head">
+              <div>
+                <strong>오늘 3분 연습</strong>
+                <span id="dailyPracticeText">0:00 / 3:00</span>
+              </div>
+              <button class="secondary-button" id="dailyPracticeButton" type="button">
+                3분 시작
+              </button>
+            </div>
+            <div class="mission-bar" aria-hidden="true">
+              <div id="dailyPracticeFill"></div>
+            </div>
+            <div id="stickerShelf" class="sticker-shelf" aria-label="칭찬 스티커"></div>
+          </div>
         </div>
 
         <div class="mistake-panel" aria-label="어려운 음 복습">
@@ -117,6 +132,28 @@
             <button class="ghost-button" id="focusModeButton" type="button">
               큰 화면
             </button>
+          </div>
+
+          <div class="practice-options" aria-label="연습 옵션">
+            <button class="option-toggle" id="waitModeButton" type="button">
+              기다려줘 켬
+            </button>
+            <button class="option-toggle" id="colorNotesButton" type="button">
+              색깔 계이름 켬
+            </button>
+            <div class="tempo-presets" aria-label="느리게 연습">
+              <span>느리게</span>
+              <button type="button" data-tempo-preset="50">50%</button>
+              <button type="button" data-tempo-preset="75">75%</button>
+              <button type="button" data-tempo-preset="100">100%</button>
+            </div>
+            <div class="loop-controls" aria-label="구간 반복">
+              <span id="loopRangeLabel">전체 구간</span>
+              <button type="button" id="loopStartButton">시작</button>
+              <button type="button" id="loopEndButton">끝</button>
+              <button type="button" id="loopToggleButton">반복 켜기</button>
+              <button type="button" id="loopClearButton">해제</button>
+            </div>
           </div>
 
           <div class="input-feedback">
@@ -267,7 +304,7 @@
           </div>
           <label class="tempo-control" for="tempoSlider">
             <span>빠르기</span>
-            <input id="tempoSlider" type="range" min="60" max="132" value="88" />
+            <input id="tempoSlider" type="range" min="50" max="132" value="88" />
             <strong id="tempoValue">88</strong>
           </label>
         </div>

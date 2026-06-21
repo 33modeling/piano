@@ -77,6 +77,12 @@ const stageModeButtons = ["listen", "teach", "play"].map((mode) => {
   return button;
 });
 
+const tempoPresetButtons = ["50", "75", "100"].map((preset) => {
+  const button = new FakeElement(`[data-tempo-preset="${preset}"]`);
+  button.dataset.tempoPreset = preset;
+  return button;
+});
+
 const context = {
   assert,
   console,
@@ -92,6 +98,9 @@ const context = {
     querySelectorAll(selector) {
       if (selector === "[data-stage-mode]") {
         return stageModeButtons;
+      }
+      if (selector === "[data-tempo-preset]") {
+        return tempoPresetButtons;
       }
       return [];
     },
@@ -112,6 +121,9 @@ const context = {
     addEventListener() {},
     setTimeout(callback) {
       return setTimeout(callback, 0);
+    },
+    setInterval() {
+      return 1;
     },
   },
 };
@@ -136,6 +148,29 @@ globalThis.__pianoSmoke = (() => {
   assert.equal(state.soundStyle, "bell");
   setSoundVolume(65);
   assert.equal(state.soundVolume, 0.65);
+  setTempoPreset(50);
+  assert.equal(state.tempo, 50);
+  assert.equal(state.tempoPreset, 50);
+  toggleWaitMode();
+  assert.equal(state.waitMode, false);
+  toggleColorNotes();
+  assert.equal(state.colorNotes, false);
+  toggleColorNotes();
+  assert.equal(state.colorNotes, true);
+  state.currentIndex = 2;
+  setLoopBoundary("start");
+  state.currentIndex = 4;
+  setLoopBoundary("end");
+  toggleLoop();
+  assert.equal(state.loopEnabled, true);
+  state.currentIndex = 4;
+  nextStep();
+  assert.equal(state.currentIndex, 2);
+  clearLoopRange();
+  assert.equal(state.loopEnabled, false);
+  addPracticeSeconds(180);
+  assert.equal(state.dailyPracticeSeconds, 180);
+  assert.ok(state.stickers.some((sticker) => sticker.key.startsWith("daily-")));
   recordMistake(["D4", "D4"]);
   recordMistake(["F4"]);
   assert.equal(state.mistakes.D4, 1);

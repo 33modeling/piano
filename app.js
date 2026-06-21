@@ -69,6 +69,23 @@ const FINGER_NAMES = {
   4: "약지",
   5: "새끼",
 };
+const NOTE_COLORS = {
+  C: "#ff5f7e",
+  "C#": "#ff7f50",
+  D: "#ffb703",
+  "D#": "#ffd166",
+  E: "#7bd88f",
+  F: "#2ec4b6",
+  "F#": "#00a6fb",
+  G: "#4d96ff",
+  "G#": "#6c63ff",
+  A: "#b967ff",
+  "A#": "#ff6ec7",
+  B: "#ff8fab",
+};
+const BASE_TEMPO = 100;
+const TEMPO_PRESETS = [50, 75, 100];
+const DAILY_TARGET_SECONDS = 180;
 const RIGHT_FINGERS = {
   C: 1,
   D: 2,
@@ -326,6 +343,19 @@ const state = {
   theme: "pop",
   soundStyle: "soft",
   soundVolume: 0.8,
+  waitMode: true,
+  colorNotes: true,
+  tempoPreset: "custom",
+  loopStart: 0,
+  loopEnd: null,
+  loopEnabled: false,
+  feedbackText: "",
+  dailyPracticeDate: todayKey(),
+  dailyPracticeSeconds: 0,
+  dailyPracticeActive: false,
+  dailyRewardedDate: "",
+  stickers: [],
+  timerId: null,
 };
 
 const elements = {
@@ -346,6 +376,13 @@ const elements = {
   volumeSlider: document.querySelector("#volumeSlider"),
   volumeValue: document.querySelector("#volumeValue"),
   soundPreviewButton: document.querySelector("#soundPreviewButton"),
+  waitModeButton: document.querySelector("#waitModeButton"),
+  colorNotesButton: document.querySelector("#colorNotesButton"),
+  loopRangeLabel: document.querySelector("#loopRangeLabel"),
+  loopStartButton: document.querySelector("#loopStartButton"),
+  loopEndButton: document.querySelector("#loopEndButton"),
+  loopToggleButton: document.querySelector("#loopToggleButton"),
+  loopClearButton: document.querySelector("#loopClearButton"),
   playGuideButton: document.querySelector("#playGuideButton"),
   repeatButton: document.querySelector("#repeatButton"),
   nextButton: document.querySelector("#nextButton"),
@@ -362,6 +399,10 @@ const elements = {
   sequencePreview: document.querySelector("#sequencePreview"),
   sheetTrack: document.querySelector("#sheetTrack"),
   missionList: document.querySelector("#missionList"),
+  dailyPracticeText: document.querySelector("#dailyPracticeText"),
+  dailyPracticeButton: document.querySelector("#dailyPracticeButton"),
+  dailyPracticeFill: document.querySelector("#dailyPracticeFill"),
+  stickerShelf: document.querySelector("#stickerShelf"),
   mistakeList: document.querySelector("#mistakeList"),
   mistakePracticeButton: document.querySelector("#mistakePracticeButton"),
   clearMistakesButton: document.querySelector("#clearMistakesButton"),
@@ -438,6 +479,15 @@ function solfegeFor(note) {
 function plainSolfege(note) {
   const { pitch } = splitNote(note);
   return SOLFEGE[pitch] || pitch;
+}
+
+function noteColorFor(note) {
+  const { pitch, letter } = splitNote(note);
+  return NOTE_COLORS[pitch] || NOTE_COLORS[letter] || "#4d96ff";
+}
+
+function noteColorStyle(note) {
+  return `--note-color: ${noteColorFor(note)}`;
 }
 
 function handText(hand) {
@@ -557,6 +607,7 @@ function buildSequence(song, level) {
 function setSequence(sequence, startIndex = 0) {
   state.sequence = sequence;
   state.currentIndex = Math.min(startIndex, Math.max(0, sequence.length - 1));
+  normalizeLoopRange();
   resetPendingNotes();
   renderPractice();
   renderSequencePreview();
@@ -574,6 +625,7 @@ function resetPendingNotes() {
 function loadCurrentSong(startIndex = 0) {
   const song = getCurrentSong();
   elements.currentSongTitle.textContent = song.title;
+  state.feedbackText = "";
   setSequence(buildSequence(song, state.level), startIndex);
   if (song.needsScore) {
     elements.customTitle.value = song.title;
@@ -639,7 +691,9 @@ function renderPractice() {
   elements.midiButton.classList.toggle("active-input", state.midiActive);
   elements.focusModeButton.textContent = state.focusMode ? "전체 보기" : "큰 화면";
   applyFocusMode();
+  applyColorNotes();
   renderSettings();
+  renderPracticeOptions();
 
   if (!current) {
     elements.targetNotes.innerHTML = "";
@@ -661,13 +715,13 @@ function renderPractice() {
       ? "차례대로 누르기"
       : `${current.notes[0].finger}번 ${FINGER_NAMES[current.notes[0].finger]}`;
   elements.beatBadge.textContent = `${current.duration}박`;
-  elements.coachText.textContent = level.coach;
+  elements.coachText.textContent = state.feedbackText || level.coach;
 
   elements.targetNotes.innerHTML = current.notes
     .map((item) => {
       const done = state.completedNotes.has(item.note) ? " done" : "";
       return `
-        <div class="target-note${done}">
+        <div class="target-note${done}" style="${noteColorStyle(item.note)}">
           <strong>${escapeHtml(plainSolfege(item.note))}</strong>
           <span>${escapeHtml(handText(item.hand))} ${item.finger}번 · ${escapeHtml(item.note)}</span>
         </div>
@@ -688,7 +742,8 @@ function renderSequencePreview() {
     .map((step, index) => {
       const current = index === state.currentIndex ? " current" : "";
       const label = step.notes.map((item) => plainSolfege(item.note)).join("+");
-      return `<span class="note-chip${current}">${escapeHtml(label)}<small>${step.duration}박</small></span>`;
+      const color = step.notes[0] ? noteColorStyle(step.notes[0].note) : "";
+      return `<span class="note-chip${current}" style="${color}">${escapeHtml(label)}<small>${step.duration}박</small></span>`;
     })
     .join("");
 }
@@ -720,7 +775,8 @@ function renderKeyboard() {
     ${whiteNotes
       .map(
         (note) => `
-          <button class="white-key" type="button" data-note="${note}">
+          <button class="white-key" type="button" data-note="${note}" style="${noteColorStyle(note)}">
+            <span class="key-color" aria-hidden="true"></span>
             <span class="key-name">${plainSolfege(note)}</span>
             <span class="key-note">${note}</span>
           </button>
@@ -730,7 +786,8 @@ function renderKeyboard() {
     ${blackNotes
       .map(
         ({ note, left }) => `
-          <button class="black-key" type="button" data-note="${note}" style="left: calc(${left}% - 16px)">
+          <button class="black-key" type="button" data-note="${note}" style="left: calc(${left}% - 16px); ${noteColorStyle(note)}">
+            <span class="key-color" aria-hidden="true"></span>
             <span class="key-name">${plainSolfege(note)}</span>
             <span class="key-note">${note}</span>
           </button>
@@ -746,10 +803,12 @@ function renderStageTrack() {
   elements.sheetTrack.innerHTML = state.sequence
     .map((step, index) => {
       const status = index < state.currentIndex ? " done" : index === state.currentIndex ? " current" : "";
+      const looped = state.loopEnabled && index >= state.loopStart && index <= getLoopEnd() ? " looped" : "";
       const notes = step.notes.map((item) => plainSolfege(item.note)).join("+");
       const hands = [...new Set(step.notes.map((item) => handText(item.hand)))].join("/");
+      const color = step.notes[0] ? noteColorStyle(step.notes[0].note) : "";
       return `
-        <div class="sheet-note${status}" data-stage-index="${index}">
+        <div class="sheet-note${status}${looped}" data-stage-index="${index}" style="${color}">
           <strong>${escapeHtml(notes)}</strong>
           <small>${escapeHtml(hands)}</small>
         </div>
@@ -806,6 +865,127 @@ function renderMissions() {
       `;
     })
     .join("");
+  renderDailyPractice();
+}
+
+function todayKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function ensureDailyPracticeDate() {
+  const today = todayKey();
+  if (state.dailyPracticeDate === today) return;
+  state.dailyPracticeDate = today;
+  state.dailyPracticeSeconds = 0;
+  state.dailyPracticeActive = false;
+}
+
+function formatPracticeTime(seconds) {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const rest = String(safeSeconds % 60).padStart(2, "0");
+  return `${minutes}:${rest}`;
+}
+
+function renderDailyPractice() {
+  ensureDailyPracticeDate();
+  const seconds = Math.min(state.dailyPracticeSeconds, DAILY_TARGET_SECONDS);
+  const progress = Math.round((seconds / DAILY_TARGET_SECONDS) * 100);
+  const completed = seconds >= DAILY_TARGET_SECONDS;
+  elements.dailyPracticeText.textContent = `${formatPracticeTime(seconds)} / 3:00`;
+  elements.dailyPracticeFill.style.width = `${progress}%`;
+  elements.dailyPracticeButton.textContent = completed ? "완료" : state.dailyPracticeActive ? "잠시 멈춤" : "3분 시작";
+  elements.dailyPracticeButton.disabled = completed;
+  elements.dailyPracticeButton.classList.toggle("active-input", state.dailyPracticeActive && !completed);
+
+  if (!state.stickers.length) {
+    elements.stickerShelf.innerHTML = '<span class="empty-state">스티커를 모아봐요.</span>';
+    return;
+  }
+
+  elements.stickerShelf.innerHTML = state.stickers
+    .slice(0, 6)
+    .map(
+      (sticker) => `
+        <span class="sticker-chip">
+          <strong>${escapeHtml(sticker.label)}</strong>
+          <small>${escapeHtml(sticker.detail)}</small>
+        </span>
+      `,
+    )
+    .join("");
+}
+
+function addSticker(key, label, detail) {
+  if (state.stickers.some((sticker) => sticker.key === key)) return false;
+  state.stickers.unshift({
+    key,
+    label,
+    detail,
+    date: todayKey(),
+  });
+  state.stickers = state.stickers.slice(0, 24);
+  return true;
+}
+
+function awardDailyStickerIfReady() {
+  const today = todayKey();
+  if (state.dailyPracticeSeconds < DAILY_TARGET_SECONDS || state.dailyRewardedDate === today) return;
+  state.dailyRewardedDate = today;
+  state.dailyPracticeActive = false;
+  addSticker(`daily-${today}`, "3분", "오늘 완성");
+  state.feedbackText = "오늘 3분 연습을 완성했어요. 칭찬 스티커를 받았습니다.";
+}
+
+function maybeAwardStreakSticker() {
+  const today = todayKey();
+  if (state.streak >= 5) {
+    addSticker(`streak-5-${today}`, "연속", "5번 성공");
+  }
+  if (state.streak >= 10) {
+    addSticker(`streak-10-${today}`, "집중", "10번 성공");
+  }
+}
+
+function maybeAwardLoopSticker() {
+  if (!state.loopEnabled) return;
+  addSticker(`loop-${todayKey()}`, "반복", "구간 완주");
+}
+
+function addPracticeSeconds(seconds) {
+  ensureDailyPracticeDate();
+  state.dailyPracticeSeconds = Math.min(DAILY_TARGET_SECONDS, state.dailyPracticeSeconds + seconds);
+  awardDailyStickerIfReady();
+  renderDailyPractice();
+  saveProgress();
+}
+
+function markPracticeActivity() {
+  ensureDailyPracticeDate();
+  if (state.dailyPracticeSeconds < DAILY_TARGET_SECONDS) {
+    state.dailyPracticeActive = true;
+  }
+}
+
+function toggleDailyPractice() {
+  ensureDailyPracticeDate();
+  if (state.dailyPracticeSeconds >= DAILY_TARGET_SECONDS) return;
+  state.dailyPracticeActive = !state.dailyPracticeActive;
+  renderDailyPractice();
+  saveProgress();
+}
+
+function startDailyTicker() {
+  if (state.timerId || !window.setInterval) return;
+  state.timerId = window.setInterval(() => {
+    ensureDailyPracticeDate();
+    if (!state.dailyPracticeActive) return;
+    if (document.visibilityState === "hidden") return;
+    addPracticeSeconds(1);
+  }, 1000);
 }
 
 function getMistakeEntries() {
@@ -854,6 +1034,30 @@ function renderSuggestion() {
   }
 
   elements.nextSuggestion.textContent = `${song.title} ${state.level}단계를 이어서 연습해요.`;
+}
+
+function renderPracticeOptions() {
+  const total = state.sequence.length;
+  const loopEnd = getLoopEnd();
+  const loopStartLabel = total ? state.loopStart + 1 : 0;
+  const loopEndLabel = total ? loopEnd + 1 : 0;
+  const loopPrefix = state.loopEnabled ? "반복 중" : "구간";
+
+  elements.waitModeButton.textContent = state.waitMode ? "기다려줘 켬" : "엄격 판정";
+  elements.waitModeButton.classList.toggle("active", state.waitMode);
+  elements.colorNotesButton.textContent = state.colorNotes ? "색깔 계이름 켬" : "색깔 계이름 끔";
+  elements.colorNotesButton.classList.toggle("active", state.colorNotes);
+  elements.loopRangeLabel.textContent = total
+    ? `${loopPrefix} ${loopStartLabel}-${loopEndLabel} / ${total}`
+    : "전체 구간";
+  elements.loopToggleButton.textContent = state.loopEnabled ? "반복 끄기" : "반복 켜기";
+  elements.loopToggleButton.classList.toggle("active", state.loopEnabled);
+  elements.loopClearButton.disabled =
+    !state.loopEnabled && state.loopStart === 0 && (state.loopEnd === null || state.loopEnd === total - 1);
+
+  document.querySelectorAll("[data-tempo-preset]").forEach((button) => {
+    button.classList.toggle("active", String(state.tempoPreset) === button.dataset.tempoPreset);
+  });
 }
 
 function recordMistake(expectedNotes) {
@@ -912,6 +1116,7 @@ function startMistakePractice() {
   state.selectedSongId = "review";
   state.currentIndex = 0;
   state.stageMode = "teach";
+  resetLoopRange();
   loadCurrentSong();
   saveProgress();
   document.querySelector(".lesson-panel")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
@@ -926,6 +1131,7 @@ function quickStart() {
   if (state.streak >= 5 && state.level < levels.length) {
     state.level += 1;
     state.currentIndex = 0;
+    resetLoopRange();
     loadCurrentSong();
   } else {
     restartStep();
@@ -948,6 +1154,10 @@ function toggleFocusMode() {
 
 function applyTheme() {
   document.body?.setAttribute("data-theme", state.theme);
+}
+
+function applyColorNotes() {
+  document.body?.classList.toggle("color-notes", state.colorNotes);
 }
 
 function renderSettings() {
@@ -977,6 +1187,107 @@ function setSoundStyle(style) {
 function setSoundVolume(value) {
   state.soundVolume = Math.min(1, Math.max(0.3, Number(value) / 100));
   renderSettings();
+  saveProgress();
+}
+
+function setTempo(value, preset = "custom") {
+  state.tempo = Math.min(132, Math.max(50, Number(value) || BASE_TEMPO));
+  state.tempoPreset = preset;
+  renderPractice();
+  saveProgress();
+}
+
+function setTempoPreset(percent) {
+  const preset = Number(percent);
+  if (!TEMPO_PRESETS.includes(preset)) return;
+  setTempo(Math.round((BASE_TEMPO * preset) / 100), preset);
+}
+
+function toggleWaitMode() {
+  state.waitMode = !state.waitMode;
+  state.feedbackText = state.waitMode
+    ? "기다려줘 모드가 켜졌어요. 틀려도 천천히 다시 누르면 됩니다."
+    : "엄격 판정으로 바꿨어요. 틀린 음은 오답으로 기록됩니다.";
+  renderPractice();
+  saveProgress();
+}
+
+function toggleColorNotes() {
+  state.colorNotes = !state.colorNotes;
+  applyColorNotes();
+  renderPractice();
+  saveProgress();
+}
+
+function getLoopEnd() {
+  if (!state.sequence.length) return 0;
+  return state.loopEnd === null ? state.sequence.length - 1 : state.loopEnd;
+}
+
+function normalizeLoopRange() {
+  const total = state.sequence.length;
+  if (!total) {
+    state.loopStart = 0;
+    state.loopEnd = null;
+    state.loopEnabled = false;
+    return;
+  }
+
+  const last = total - 1;
+  state.loopStart = Math.min(last, Math.max(0, Number(state.loopStart) || 0));
+  state.loopEnd = state.loopEnd === null ? null : Math.min(last, Math.max(0, Number(state.loopEnd) || 0));
+
+  if (state.loopEnd !== null && state.loopStart > state.loopEnd) {
+    const nextStart = state.loopEnd;
+    state.loopEnd = state.loopStart;
+    state.loopStart = nextStart;
+  }
+
+  if (state.currentIndex < 0 || state.currentIndex > last) {
+    state.currentIndex = 0;
+  }
+}
+
+function resetLoopRange() {
+  state.loopStart = 0;
+  state.loopEnd = null;
+  state.loopEnabled = false;
+}
+
+function setLoopBoundary(boundary) {
+  if (!state.sequence.length) return;
+  if (boundary === "start") {
+    state.loopStart = state.currentIndex;
+  } else {
+    state.loopEnd = state.currentIndex;
+  }
+  normalizeLoopRange();
+  state.feedbackText = `구간 ${state.loopStart + 1}-${getLoopEnd() + 1}을 지정했어요.`;
+  renderPractice();
+  renderStageTrack();
+  saveProgress();
+}
+
+function toggleLoop() {
+  if (!state.sequence.length) return;
+  normalizeLoopRange();
+  state.loopEnabled = !state.loopEnabled;
+  if (state.loopEnabled && (state.currentIndex < state.loopStart || state.currentIndex > getLoopEnd())) {
+    state.currentIndex = state.loopStart;
+    resetPendingNotes();
+  }
+  state.feedbackText = state.loopEnabled ? "구간 반복을 시작했어요." : "구간 반복을 멈췄어요.";
+  renderPractice();
+  renderSequencePreview();
+  renderStageTrack();
+  saveProgress();
+}
+
+function clearLoopRange() {
+  resetLoopRange();
+  state.feedbackText = "전체 구간 연습으로 돌아왔어요.";
+  renderPractice();
+  renderStageTrack();
   saveProgress();
 }
 
@@ -1037,6 +1348,7 @@ function playNote(note, duration = 0.4, when = 0) {
 function playCurrentStep() {
   const current = state.sequence[state.currentIndex];
   if (!current) return;
+  markPracticeActivity();
   const beatSeconds = 60 / state.tempo;
   current.notes.forEach((item) => {
     playNote(item.note, beatSeconds * Math.max(0.55, current.duration));
@@ -1045,8 +1357,12 @@ function playCurrentStep() {
 }
 
 function playGuide() {
+  markPracticeActivity();
   const startIndex = state.currentIndex;
-  const guide = state.sequence.slice(startIndex, Math.min(startIndex + 8, state.sequence.length));
+  const guideEnd = state.loopEnabled ? Math.min(getLoopEnd() + 1, state.sequence.length) : Math.min(startIndex + 8, state.sequence.length);
+  const guide = state.waitMode
+    ? state.sequence.slice(startIndex, Math.min(startIndex + 1, state.sequence.length))
+    : state.sequence.slice(startIndex, guideEnd);
   let offset = 0;
   const beatSeconds = 60 / state.tempo;
 
@@ -1064,6 +1380,7 @@ function flashKey(note) {
 }
 
 function handleNotePress(note) {
+  markPracticeActivity();
   playNote(note);
   flashKey(note);
   judgeNote(note);
@@ -1079,6 +1396,7 @@ function judgeNote(note) {
     state.pendingNotes.delete(note);
     state.completedNotes.add(note);
     resolveMistake(note);
+    state.feedbackText = "";
     elements.promptCard.classList.remove("miss");
     elements.promptCard.classList.add("correct");
     window.setTimeout(() => elements.promptCard.classList.remove("correct"), 340);
@@ -1087,6 +1405,7 @@ function judgeNote(note) {
     if (state.pendingNotes.size === 0) {
       state.score += 1;
       state.streak += 1;
+      maybeAwardStreakSticker();
       state.recognitionLockUntil = Date.now() + 600;
       saveProgress();
       window.setTimeout(nextStep, 420);
@@ -1095,9 +1414,13 @@ function judgeNote(note) {
   }
 
   if (!expected.includes(note)) {
-    state.streak = 0;
+    if (!state.waitMode) {
+      state.streak = 0;
+    }
     recordMistake(state.pendingNotes.size ? [...state.pendingNotes] : expected);
-    elements.coachText.textContent = `이번에는 ${expected.map(plainSolfege).join(", ")}을 눌러볼까요?`;
+    state.feedbackText = state.waitMode
+      ? `${expected.map(plainSolfege).join(", ")}을 기다리고 있어요. 천천히 다시 눌러보세요.`
+      : `이번에는 ${expected.map(plainSolfege).join(", ")}을 눌러볼까요?`;
     elements.promptCard.classList.remove("correct");
     elements.promptCard.classList.add("miss");
     window.setTimeout(() => elements.promptCard.classList.remove("miss"), 280);
@@ -1111,6 +1434,7 @@ function handleDetectedNote(note) {
   if (now < state.recognitionLockUntil) return;
   if (state.lastRecognized.note === note && now - state.lastRecognized.time < 700) return;
 
+  markPracticeActivity();
   state.lastRecognized = { note, time: now };
   elements.detectedNote.textContent = plainSolfege(note);
   elements.listenStatus.textContent = `${note} 감지됨`;
@@ -1120,7 +1444,13 @@ function handleDetectedNote(note) {
 
 function nextStep() {
   if (!state.sequence.length) return;
-  state.currentIndex = (state.currentIndex + 1) % state.sequence.length;
+  const loopEnd = getLoopEnd();
+  const shouldWrapLoop = state.loopEnabled && state.currentIndex >= loopEnd;
+  state.currentIndex = shouldWrapLoop ? state.loopStart : (state.currentIndex + 1) % state.sequence.length;
+  if (shouldWrapLoop) {
+    maybeAwardLoopSticker();
+  }
+  state.feedbackText = "";
   resetPendingNotes();
   renderPractice();
   renderSequencePreview();
@@ -1128,6 +1458,7 @@ function nextStep() {
 }
 
 function restartStep() {
+  state.feedbackText = "";
   resetPendingNotes();
   renderPractice();
   playCurrentStep();
@@ -1382,6 +1713,7 @@ function generateCustom() {
   if (namedSong && !scoreInput) {
     state.selectedSongId = namedSong.id;
     state.currentIndex = 0;
+    resetLoopRange();
     loadCurrentSong();
     renderGeneratedNotes(namedSong.melody);
     elements.customHint.textContent = namedSong.needsScore
@@ -1410,6 +1742,7 @@ function generateCustom() {
   };
   state.selectedSongId = "custom";
   state.currentIndex = 0;
+  resetLoopRange();
   elements.customHint.textContent = `${parsed.length}개의 계이름을 만들었습니다.`;
   renderGeneratedNotes(parsed);
   loadCurrentSong();
@@ -1424,7 +1757,10 @@ function buildRangeLabel(items) {
 
 function renderGeneratedNotes(items) {
   elements.generatedNotes.innerHTML = items
-    .map((item) => `<span class="note-chip">${escapeHtml(plainSolfege(item.note))}<small>${escapeHtml(item.note)}</small></span>`)
+    .map(
+      (item) =>
+        `<span class="note-chip" style="${noteColorStyle(item.note)}">${escapeHtml(plainSolfege(item.note))}<small>${escapeHtml(item.note)}</small></span>`,
+    )
     .join("");
 }
 
@@ -1450,6 +1786,16 @@ function saveProgress() {
     theme: state.theme,
     soundStyle: state.soundStyle,
     soundVolume: state.soundVolume,
+    waitMode: state.waitMode,
+    colorNotes: state.colorNotes,
+    tempoPreset: state.tempoPreset,
+    loopStart: state.loopStart,
+    loopEnd: state.loopEnd,
+    loopEnabled: state.loopEnabled,
+    dailyPracticeDate: state.dailyPracticeDate,
+    dailyPracticeSeconds: state.dailyPracticeSeconds,
+    dailyRewardedDate: state.dailyRewardedDate,
+    stickers: state.stickers,
   };
   localStorage.setItem("little-piano-progress", JSON.stringify(progress));
 }
@@ -1473,6 +1819,18 @@ function loadProgress() {
     state.theme = THEME_IDS.includes(progress.theme) ? progress.theme : "pop";
     state.soundStyle = SOUND_STYLES[progress.soundStyle] ? progress.soundStyle : "soft";
     state.soundVolume = Number(progress.soundVolume) || 0.8;
+    state.waitMode = progress.waitMode !== false;
+    state.colorNotes = progress.colorNotes !== false;
+    state.tempoPreset = TEMPO_PRESETS.includes(Number(progress.tempoPreset)) ? Number(progress.tempoPreset) : "custom";
+    state.loopStart = Number(progress.loopStart) || 0;
+    state.loopEnd = progress.loopEnd === null || progress.loopEnd === undefined ? null : Number(progress.loopEnd) || 0;
+    state.loopEnabled = Boolean(progress.loopEnabled);
+    state.dailyPracticeDate = progress.dailyPracticeDate || todayKey();
+    state.dailyPracticeSeconds = Math.min(DAILY_TARGET_SECONDS, Number(progress.dailyPracticeSeconds) || 0);
+    state.dailyPracticeActive = false;
+    state.dailyRewardedDate = progress.dailyRewardedDate || "";
+    state.stickers = Array.isArray(progress.stickers) ? progress.stickers.slice(0, 24) : [];
+    ensureDailyPracticeDate();
   } catch {
     localStorage.removeItem("little-piano-progress");
   }
@@ -1483,6 +1841,10 @@ function resetProgress() {
   state.streak = 0;
   state.currentIndex = 0;
   state.mistakes = {};
+  state.feedbackText = "";
+  state.dailyPracticeSeconds = 0;
+  state.dailyPracticeActive = false;
+  state.dailyRewardedDate = "";
   resetPendingNotes();
   saveProgress();
   renderPractice();
@@ -1495,6 +1857,8 @@ function bindEvents() {
     if (!button) return;
     state.selectedSongId = button.dataset.songId;
     state.currentIndex = 0;
+    state.feedbackText = "";
+    resetLoopRange();
     saveProgress();
     loadCurrentSong();
   });
@@ -1504,6 +1868,8 @@ function bindEvents() {
     if (!button) return;
     state.level = Number(button.dataset.level);
     state.currentIndex = 0;
+    state.feedbackText = "";
+    resetLoopRange();
     saveProgress();
     loadCurrentSong();
   });
@@ -1520,6 +1886,13 @@ function bindEvents() {
   elements.nextButton.addEventListener("click", nextStep);
   elements.quickStartButton.addEventListener("click", quickStart);
   elements.focusModeButton.addEventListener("click", toggleFocusMode);
+  elements.waitModeButton.addEventListener("click", toggleWaitMode);
+  elements.colorNotesButton.addEventListener("click", toggleColorNotes);
+  elements.loopStartButton.addEventListener("click", () => setLoopBoundary("start"));
+  elements.loopEndButton.addEventListener("click", () => setLoopBoundary("end"));
+  elements.loopToggleButton.addEventListener("click", toggleLoop);
+  elements.loopClearButton.addEventListener("click", clearLoopRange);
+  elements.dailyPracticeButton.addEventListener("click", toggleDailyPractice);
   elements.micButton.addEventListener("click", toggleMic);
   elements.midiButton.addEventListener("click", toggleMidi);
   elements.mistakePracticeButton.addEventListener("click", startMistakePractice);
@@ -1541,9 +1914,7 @@ function bindEvents() {
   });
 
   elements.tempoSlider.addEventListener("input", (event) => {
-    state.tempo = Number(event.target.value);
-    elements.tempoValue.textContent = state.tempo;
-    saveProgress();
+    setTempo(event.target.value);
   });
 
   elements.volumeSlider.addEventListener("input", (event) => {
@@ -1561,6 +1932,10 @@ function bindEvents() {
       renderStageTrack();
       saveProgress();
     });
+  });
+
+  document.querySelectorAll("[data-tempo-preset]").forEach((button) => {
+    button.addEventListener("click", () => setTempoPreset(button.dataset.tempoPreset));
   });
 
   window.addEventListener("keydown", (event) => {
@@ -1587,6 +1962,7 @@ function bindEvents() {
 function init() {
   loadProgress();
   applyTheme();
+  applyColorNotes();
   const savedIndex = state.currentIndex;
   renderKeyboard();
   renderSongs();
@@ -1599,6 +1975,7 @@ function init() {
   resetPendingNotes();
   renderPractice();
   renderSequencePreview();
+  startDailyTicker();
 }
 
 init();
