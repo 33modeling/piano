@@ -88,6 +88,15 @@ const LEFT_FINGERS = {
   B: 2,
 };
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const songs = [
   {
     id: "twinkle",
@@ -517,13 +526,13 @@ function renderSongs() {
     .map((song) => {
       const active = song.id === state.selectedSongId ? " active" : "";
       return `
-        <button class="song-button${active}" type="button" data-song-id="${song.id}">
-          <span class="song-mark">${song.mark}</span>
+        <button class="song-button${active}" type="button" data-song-id="${escapeHtml(song.id)}">
+          <span class="song-mark">${escapeHtml(song.mark)}</span>
           <span>
-            <strong>${song.title}</strong>
-            <span>${song.description}</span>
+            <strong>${escapeHtml(song.title)}</strong>
+            <span>${escapeHtml(song.description)}</span>
           </span>
-          <span class="song-range">${song.range}</span>
+          <span class="song-range">${escapeHtml(song.range)}</span>
         </button>
       `;
     })
@@ -538,8 +547,8 @@ function renderLevels() {
         <button class="level-button${active}" type="button" data-level="${level.id}">
           <span class="level-number">${level.id}</span>
           <span>
-            <strong>${level.title}</strong>
-            <span>${level.summary}</span>
+            <strong>${escapeHtml(level.title)}</strong>
+            <span>${escapeHtml(level.summary)}</span>
           </span>
           <span class="song-range">Lv.${level.id}</span>
         </button>
@@ -588,8 +597,8 @@ function renderPractice() {
       const done = state.completedNotes.has(item.note) ? " done" : "";
       return `
         <div class="target-note${done}">
-          <strong>${plainSolfege(item.note)}</strong>
-          <span>${handText(item.hand)} ${item.finger}번 · ${item.note}</span>
+          <strong>${escapeHtml(plainSolfege(item.note))}</strong>
+          <span>${escapeHtml(handText(item.hand))} ${item.finger}번 · ${escapeHtml(item.note)}</span>
         </div>
       `;
     })
@@ -606,7 +615,7 @@ function renderSequencePreview() {
     .map((step, index) => {
       const current = index === state.currentIndex ? " current" : "";
       const label = step.notes.map((item) => plainSolfege(item.note)).join("+");
-      return `<span class="note-chip${current}">${label}<small>${step.duration}박</small></span>`;
+      return `<span class="note-chip${current}">${escapeHtml(label)}<small>${step.duration}박</small></span>`;
     })
     .join("");
 }
@@ -668,8 +677,8 @@ function renderStageTrack() {
       const hands = [...new Set(step.notes.map((item) => handText(item.hand)))].join("/");
       return `
         <div class="sheet-note${status}" data-stage-index="${index}">
-          <strong>${notes}</strong>
-          <small>${hands}</small>
+          <strong>${escapeHtml(notes)}</strong>
+          <small>${escapeHtml(hands)}</small>
         </div>
       `;
     })
@@ -717,8 +726,8 @@ function renderMissions() {
       const width = Math.round((mission.current / mission.target) * 100);
       return `
         <div class="mission-card">
-          <strong>${mission.title}</strong>
-          <span>${mission.detail}</span>
+          <strong>${escapeHtml(mission.title)}</strong>
+          <span>${escapeHtml(mission.detail)}</span>
           <div class="mission-bar"><div style="width: ${width}%"></div></div>
         </div>
       `;
@@ -873,9 +882,16 @@ function parseNoteToken(rawToken, defaultOctave = 4) {
   const token = cleaned.replace(/\/\d+$/, "");
   const octaveMatch = token.match(/(\d)$/);
   const octave = octaveMatch ? Number(octaveMatch[1]) : defaultOctave;
-  const body = octaveMatch ? token.slice(0, -1) : token;
-  const accidental = body.includes("#") ? "#" : body.toLowerCase().includes("b") ? "b" : "";
-  const base = body.replace(/[#b]/gi, "");
+  let body = octaveMatch ? token.slice(0, -1) : token;
+  let accidental = "";
+  if (body.endsWith("#")) {
+    accidental = "#";
+    body = body.slice(0, -1);
+  } else if (body.endsWith("b") && body.length > 1) {
+    accidental = "b";
+    body = body.slice(0, -1);
+  }
+  const base = body;
 
   let letter = null;
   const upper = base.toUpperCase();
@@ -1145,7 +1161,7 @@ function buildRangeLabel(items) {
 
 function renderGeneratedNotes(items) {
   elements.generatedNotes.innerHTML = items
-    .map((item) => `<span class="note-chip">${plainSolfege(item.note)}<small>${item.note}</small></span>`)
+    .map((item) => `<span class="note-chip">${escapeHtml(plainSolfege(item.note))}<small>${escapeHtml(item.note)}</small></span>`)
     .join("");
 }
 
