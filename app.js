@@ -93,6 +93,7 @@ const NOTE_COLORS = {
 const BASE_TEMPO = 100;
 const TEMPO_PRESETS = [50, 75, 100];
 const DAILY_TARGET_SECONDS = 180;
+const COUNT_IN_BEATS = 4;
 const WARMUP_DRILLS = [
   {
     id: "right-up",
@@ -372,6 +373,7 @@ const state = {
   customSong: null,
   reviewSong: null,
   mistakes: {},
+  fingerMistakes: {},
   focusMode: false,
   theme: "pop",
   soundStyle: "soft",
@@ -388,6 +390,21 @@ const state = {
   dailyPracticeActive: false,
   dailyRewardedDate: "",
   stickers: [],
+  rhythmActive: false,
+  rhythmStats: { perfect: 0, early: 0, late: 0, total: 0 },
+  stepDueAt: 0,
+  stepTimingRecorded: false,
+  timingFeedback: {
+    kind: "ready",
+    label: "박자 준비",
+    detail: "카운트 시작을 누르면 박자 점수를 기록합니다.",
+  },
+  countInActive: false,
+  countInRemaining: 0,
+  countInTimerId: null,
+  metronomeActive: false,
+  metronomeTimerId: null,
+  metronomeBeat: 0,
   warmupSong: null,
   warmupDrillIndex: 0,
   warmupReturn: null,
@@ -404,6 +421,11 @@ const elements = {
   beatBadge: document.querySelector("#beatBadge"),
   targetNotes: document.querySelector("#targetNotes"),
   handVisualizer: document.querySelector("#handVisualizer"),
+  timingFeedback: document.querySelector("#timingFeedback"),
+  timingDetail: document.querySelector("#timingDetail"),
+  perfectTimingCount: document.querySelector("#perfectTimingCount"),
+  earlyTimingCount: document.querySelector("#earlyTimingCount"),
+  lateTimingCount: document.querySelector("#lateTimingCount"),
   coachText: document.querySelector("#coachText"),
   progressFill: document.querySelector("#progressFill"),
   promptCard: document.querySelector("#promptCard"),
@@ -423,6 +445,8 @@ const elements = {
   playGuideButton: document.querySelector("#playGuideButton"),
   repeatButton: document.querySelector("#repeatButton"),
   nextButton: document.querySelector("#nextButton"),
+  countInButton: document.querySelector("#countInButton"),
+  metronomeButton: document.querySelector("#metronomeButton"),
   warmupButton: document.querySelector("#warmupButton"),
   warmupNextButton: document.querySelector("#warmupNextButton"),
   micButton: document.querySelector("#micButton"),
@@ -438,6 +462,7 @@ const elements = {
   sequencePreview: document.querySelector("#sequencePreview"),
   sheetTrack: document.querySelector("#sheetTrack"),
   missionList: document.querySelector("#missionList"),
+  parentReportList: document.querySelector("#parentReportList"),
   dailyPracticeText: document.querySelector("#dailyPracticeText"),
   dailyPracticeButton: document.querySelector("#dailyPracticeButton"),
   dailyPracticeFill: document.querySelector("#dailyPracticeFill"),
@@ -678,6 +703,10 @@ function resetPendingNotes() {
   const notes = current ? current.notes.map((item) => item.note) : [];
   state.pendingNotes = new Set(notes);
   state.completedNotes = new Set();
+  state.stepTimingRecorded = false;
+  if (state.rhythmActive && !state.countInActive) {
+    armRhythmStep();
+  }
 }
 
 function loadCurrentSong(startIndex = 0) {
@@ -752,6 +781,7 @@ function renderPractice() {
   applyColorNotes();
   renderSettings();
   renderPracticeOptions();
+  renderRhythmPanel();
 
   if (!current) {
     elements.targetNotes.innerHTML = "";
@@ -760,6 +790,7 @@ function renderPractice() {
     updateKeyHighlights();
     renderStageTrack();
     renderMissions();
+    renderParentReport();
     renderMistakes();
     renderSuggestion();
     return;
@@ -795,6 +826,7 @@ function renderPractice() {
   updateKeyHighlights();
   renderStageTrack();
   renderMissions();
+  renderParentReport();
   renderMistakes();
   renderSuggestion();
 }
@@ -1161,6 +1193,10 @@ function renderPracticeOptions() {
   elements.warmupButton.textContent = warmingUp ? "곡으로 돌아가기" : "손가락 워밍업";
   elements.warmupButton.classList.toggle("active-input", warmingUp);
   elements.warmupNextButton.disabled = !warmingUp;
+  elements.countInButton.textContent = state.countInActive ? `${state.countInRemaining || "시작"}...` : "카운트 시작";
+  elements.countInButton.disabled = state.countInActive;
+  elements.metronomeButton.textContent = state.metronomeActive ? "메트로놈 끄기" : "메트로놈";
+  elements.metronomeButton.classList.toggle("active-input", state.metronomeActive);
   elements.loopRangeLabel.textContent = total
     ? `${loopPrefix} ${loopStartLabel}-${loopEndLabel} / ${total}`
     : "전체 구간";
@@ -1174,10 +1210,90 @@ function renderPracticeOptions() {
   });
 }
 
+function renderRhythmPanel() {
+  const stats = normalizeRhythmStats(state.rhythmStats);
+  elements.timingFeedback.textContent = state.timingFeedback.label;
+  elements.timingFeedback.className = `timing-${state.timingFeedback.kind}`;
+  elements.timingDetail.textContent = state.timingFeedback.detail;
+  elements.perfectTimingCount.textContent = stats.perfect;
+  elements.earlyTimingCount.textContent = stats.early;
+  elements.lateTimingCount.textContent = stats.late;
+}
+
+function topFingerMistake() {
+  return Object.entries(state.fingerMistakes)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([finger, count]) => ({ finger: Number(finger), count }))[0];
+}
+
+function rhythmAccuracyPercent() {
+  const stats = normalizeRhythmStats(state.rhythmStats);
+  return stats.total ? Math.round((stats.perfect / stats.total) * 100) : 0;
+}
+
+function renderParentReport() {
+  if (!elements.parentReportList) return;
+  ensureDailyPracticeDate();
+  const topMistake = getMistakeEntries()[0];
+  const topFinger = topFingerMistake();
+  const rhythmPercent = rhythmAccuracyPercent();
+  const reportItems = [
+    {
+      title: "오늘 시간",
+      value: formatPracticeTime(state.dailyPracticeSeconds),
+      detail: `${Math.min(100, Math.round((state.dailyPracticeSeconds / DAILY_TARGET_SECONDS) * 100))}% 완료`,
+    },
+    {
+      title: "성공/연속",
+      value: `${state.score} / ${state.streak}`,
+      detail: state.streak >= 5 ? "다음 단계 가능" : "짧게 반복 추천",
+    },
+    {
+      title: "박자 정확도",
+      value: `${rhythmPercent}%`,
+      detail: normalizeRhythmStats(state.rhythmStats).total ? "딱 맞음 기준" : "카운트 시작 필요",
+    },
+    {
+      title: "어려운 음",
+      value: topMistake ? plainSolfege(topMistake.note) : "-",
+      detail: topMistake ? `${topMistake.count}번 복습` : "아직 없음",
+    },
+    {
+      title: "어려운 손가락",
+      value: topFinger ? `${topFinger.finger}번` : "-",
+      detail: topFinger ? `${FINGER_NAMES[topFinger.finger]} ${topFinger.count}번` : "아직 없음",
+    },
+  ];
+
+  elements.parentReportList.innerHTML = reportItems
+    .map(
+      (item) => `
+        <div class="parent-report-card">
+          <span>${escapeHtml(item.title)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <small>${escapeHtml(item.detail)}</small>
+        </div>
+      `,
+    )
+    .join("");
+}
+
 function recordMistake(expectedNotes) {
   [...new Set(expectedNotes)].forEach((note) => {
     state.mistakes[note] = (state.mistakes[note] || 0) + 1;
   });
+}
+
+function recordFingerMistakes(expectedNotes) {
+  const current = state.sequence[state.currentIndex];
+  if (!current) return;
+  const expected = new Set(expectedNotes);
+  current.notes
+    .filter((item) => expected.has(item.note))
+    .forEach((item) => {
+      state.fingerMistakes[item.finger] = (state.fingerMistakes[item.finger] || 0) + 1;
+    });
 }
 
 function resolveMistake(note) {
@@ -1190,8 +1306,10 @@ function resolveMistake(note) {
 
 function clearMistakes() {
   state.mistakes = {};
+  state.fingerMistakes = {};
   saveProgress();
   renderMistakes();
+  renderParentReport();
   renderSuggestion();
 }
 
@@ -1380,6 +1498,13 @@ function setSoundVolume(value) {
 function setTempo(value, preset = "custom") {
   state.tempo = Math.min(132, Math.max(50, Number(value) || BASE_TEMPO));
   state.tempoPreset = preset;
+  if (state.metronomeActive) {
+    if (state.metronomeTimerId && window.clearInterval) {
+      window.clearInterval(state.metronomeTimerId);
+    }
+    state.metronomeTimerId = null;
+    startMetronome();
+  }
   renderPractice();
   saveProgress();
 }
@@ -1476,6 +1601,150 @@ function clearLoopRange() {
   renderPractice();
   renderStageTrack();
   saveProgress();
+}
+
+function normalizeRhythmStats(stats) {
+  return {
+    perfect: Number(stats?.perfect) || 0,
+    early: Number(stats?.early) || 0,
+    late: Number(stats?.late) || 0,
+    total: Number(stats?.total) || 0,
+  };
+}
+
+function beatMs() {
+  return 60000 / Math.max(40, state.tempo);
+}
+
+function setTimingFeedback(kind, label, detail) {
+  state.timingFeedback = { kind, label, detail };
+  renderRhythmPanel();
+}
+
+function armRhythmStep(delayMs = beatMs()) {
+  state.rhythmActive = true;
+  state.stepDueAt = Date.now() + delayMs;
+  state.stepTimingRecorded = false;
+  setTimingFeedback("ready", "박자 준비", "다음 박자에 맞춰 눌러보세요.");
+}
+
+function classifyTiming(now = Date.now()) {
+  if (!state.rhythmActive || !state.stepDueAt) return null;
+  const delta = now - state.stepDueAt;
+  const threshold = Math.max(150, Math.min(280, beatMs() * 0.28));
+  if (Math.abs(delta) <= threshold) {
+    return { kind: "perfect", label: "딱 맞음", detail: "좋아요. 박자 안에 들어왔어요." };
+  }
+  if (delta < 0) {
+    return { kind: "early", label: "조금 빨라요", detail: "다음에는 박자 소리를 조금 더 기다려요." };
+  }
+  return { kind: "late", label: "조금 늦어요", detail: "다음에는 손가락을 미리 준비해요." };
+}
+
+function recordTimingHit(now = Date.now()) {
+  if (state.stepTimingRecorded) return;
+  const result = classifyTiming(now);
+  if (!result) return;
+  const stats = normalizeRhythmStats(state.rhythmStats);
+  stats[result.kind] += 1;
+  stats.total += 1;
+  state.rhythmStats = stats;
+  state.stepTimingRecorded = true;
+  setTimingFeedback(result.kind, result.label, result.detail);
+  maybeAwardRhythmSticker();
+}
+
+function maybeAwardRhythmSticker() {
+  const stats = normalizeRhythmStats(state.rhythmStats);
+  if (stats.perfect >= 5) {
+    addSticker(`rhythm-5-${todayKey()}`, "박자", "딱 맞음 5번");
+  }
+}
+
+function playMetronomeClick(accent = false) {
+  const note = accent ? "C6" : "G5";
+  playNote(note, accent ? 0.08 : 0.05);
+}
+
+function flashMetronome() {
+  document.body?.classList.add("metronome-flash");
+  window.setTimeout(() => document.body?.classList.remove("metronome-flash"), 120);
+}
+
+function metronomeTick() {
+  state.metronomeBeat = (state.metronomeBeat % 4) + 1;
+  playMetronomeClick(state.metronomeBeat === 1);
+  flashMetronome();
+}
+
+function startMetronome() {
+  if (state.metronomeTimerId || !window.setInterval) return;
+  state.metronomeActive = true;
+  state.rhythmActive = true;
+  state.metronomeBeat = 0;
+  armRhythmStep();
+  metronomeTick();
+  state.metronomeTimerId = window.setInterval(metronomeTick, beatMs());
+  renderPractice();
+  saveProgress();
+}
+
+function stopMetronome() {
+  state.metronomeActive = false;
+  if (state.metronomeTimerId && window.clearInterval) {
+    window.clearInterval(state.metronomeTimerId);
+  }
+  state.metronomeTimerId = null;
+  state.metronomeBeat = 0;
+  setTimingFeedback("ready", "박자 준비", "메트로놈이 꺼졌습니다.");
+  renderPractice();
+  saveProgress();
+}
+
+function toggleMetronome() {
+  if (state.metronomeActive) {
+    stopMetronome();
+  } else {
+    startMetronome();
+  }
+}
+
+function clearCountIn() {
+  if (state.countInTimerId && window.clearInterval) {
+    window.clearInterval(state.countInTimerId);
+  }
+  state.countInTimerId = null;
+  state.countInActive = false;
+  state.countInRemaining = 0;
+}
+
+function startCountIn() {
+  if (state.countInActive) return;
+  clearCountIn();
+  state.countInActive = true;
+  state.countInRemaining = COUNT_IN_BEATS;
+  state.rhythmActive = true;
+  setTimingFeedback("ready", `${state.countInRemaining}`, "카운트가 끝나면 첫 음을 눌러요.");
+  playMetronomeClick(true);
+  flashMetronome();
+  renderPractice();
+
+  state.countInTimerId = window.setInterval(() => {
+    state.countInRemaining -= 1;
+    if (state.countInRemaining > 0) {
+      setTimingFeedback("ready", `${state.countInRemaining}`, "카운트가 끝나면 첫 음을 눌러요.");
+      playMetronomeClick(state.countInRemaining === COUNT_IN_BEATS);
+      flashMetronome();
+      renderPracticeOptions();
+      return;
+    }
+
+    clearCountIn();
+    armRhythmStep(0);
+    setTimingFeedback("ready", "시작", "지금 첫 음을 눌러보세요.");
+    renderPractice();
+    saveProgress();
+  }, beatMs());
 }
 
 function previewSound() {
@@ -1591,6 +1860,7 @@ function judgeNote(note) {
   const expected = current.notes.map((item) => item.note);
 
   if (state.pendingNotes.has(note)) {
+    recordTimingHit();
     state.pendingNotes.delete(note);
     state.completedNotes.add(note);
     resolveMistake(note);
@@ -1616,6 +1886,7 @@ function judgeNote(note) {
       state.streak = 0;
     }
     recordMistake(state.pendingNotes.size ? [...state.pendingNotes] : expected);
+    recordFingerMistakes(state.pendingNotes.size ? [...state.pendingNotes] : expected);
     state.feedbackText = state.waitMode
       ? `${expected.map(plainSolfege).join(", ")}을 기다리고 있어요. 천천히 다시 눌러보세요.`
       : `이번에는 ${expected.map(plainSolfege).join(", ")}을 눌러볼까요?`;
@@ -1980,6 +2251,7 @@ function saveProgress() {
     customSong: state.customSong,
     reviewSong: state.reviewSong,
     mistakes: state.mistakes,
+    fingerMistakes: state.fingerMistakes,
     focusMode: state.focusMode,
     theme: state.theme,
     soundStyle: state.soundStyle,
@@ -1994,6 +2266,7 @@ function saveProgress() {
     dailyPracticeSeconds: state.dailyPracticeSeconds,
     dailyRewardedDate: state.dailyRewardedDate,
     stickers: state.stickers,
+    rhythmStats: state.rhythmStats,
     warmupSong: state.warmupSong,
     warmupDrillIndex: state.warmupDrillIndex,
     warmupReturn: state.warmupReturn,
@@ -2016,6 +2289,7 @@ function loadProgress() {
     state.customSong = progress.customSong || null;
     state.reviewSong = progress.reviewSong || null;
     state.mistakes = progress.mistakes || {};
+    state.fingerMistakes = progress.fingerMistakes || {};
     state.focusMode = Boolean(progress.focusMode);
     state.theme = THEME_IDS.includes(progress.theme) ? progress.theme : "pop";
     state.soundStyle = SOUND_STYLES[progress.soundStyle] ? progress.soundStyle : "soft";
@@ -2031,6 +2305,10 @@ function loadProgress() {
     state.dailyPracticeActive = false;
     state.dailyRewardedDate = progress.dailyRewardedDate || "";
     state.stickers = Array.isArray(progress.stickers) ? progress.stickers.slice(0, 24) : [];
+    state.rhythmStats = normalizeRhythmStats(progress.rhythmStats);
+    state.rhythmActive = false;
+    state.countInActive = false;
+    state.metronomeActive = false;
     state.warmupSong = progress.warmupSong || null;
     state.warmupDrillIndex = Number(progress.warmupDrillIndex) || 0;
     state.warmupReturn = progress.warmupReturn || null;
@@ -2048,7 +2326,19 @@ function resetProgress() {
   state.streak = 0;
   state.currentIndex = 0;
   state.mistakes = {};
+  state.fingerMistakes = {};
   state.feedbackText = "";
+  state.rhythmActive = false;
+  state.rhythmStats = { perfect: 0, early: 0, late: 0, total: 0 };
+  state.stepDueAt = 0;
+  state.stepTimingRecorded = false;
+  clearCountIn();
+  stopMetronome();
+  state.timingFeedback = {
+    kind: "ready",
+    label: "박자 준비",
+    detail: "카운트 시작을 누르면 박자 점수를 기록합니다.",
+  };
   state.dailyPracticeSeconds = 0;
   state.dailyPracticeActive = false;
   state.dailyRewardedDate = "";
@@ -2091,6 +2381,8 @@ function bindEvents() {
   elements.playGuideButton.addEventListener("click", playGuide);
   elements.repeatButton.addEventListener("click", restartStep);
   elements.nextButton.addEventListener("click", nextStep);
+  elements.countInButton.addEventListener("click", startCountIn);
+  elements.metronomeButton.addEventListener("click", toggleMetronome);
   elements.quickStartButton.addEventListener("click", quickStart);
   elements.focusModeButton.addEventListener("click", toggleFocusMode);
   elements.warmupButton.addEventListener("click", startFingerWarmup);

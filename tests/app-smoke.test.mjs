@@ -139,6 +139,7 @@ const context = {
     setInterval() {
       return 1;
     },
+    clearInterval() {},
   },
 };
 
@@ -194,6 +195,26 @@ globalThis.__pianoSmoke = (() => {
   assert.equal(state.currentIndex, 2);
   clearLoopRange();
   assert.equal(state.loopEnabled, false);
+  state.rhythmActive = true;
+  state.rhythmStats = { perfect: 0, early: 0, late: 0, total: 0 };
+  state.stepDueAt = 100000;
+  state.stepTimingRecorded = false;
+  recordTimingHit(100000);
+  assert.equal(state.rhythmStats.perfect, 1);
+  state.stepDueAt = 100000;
+  state.stepTimingRecorded = false;
+  recordTimingHit(99000);
+  assert.equal(state.rhythmStats.early, 1);
+  state.stepDueAt = 100000;
+  state.stepTimingRecorded = false;
+  recordTimingHit(101000);
+  assert.equal(state.rhythmStats.late, 1);
+  assert.equal(rhythmAccuracyPercent(), 33);
+  state.currentIndex = 2;
+  recordFingerMistakes(["G4"]);
+  assert.equal(state.fingerMistakes[2], 1);
+  renderParentReport();
+  assert.ok(elements.parentReportList.innerHTML.includes("박자 정확도"));
   addPracticeSeconds(180);
   assert.equal(state.dailyPracticeSeconds, 180);
   assert.ok(state.stickers.some((sticker) => sticker.key.startsWith("daily-")));

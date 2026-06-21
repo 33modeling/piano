@@ -200,6 +200,7 @@ h2 {
 .control-panel,
 .quick-card,
 .mistake-panel,
+.parent-report-panel,
 .level-panel,
 .finger-panel,
 .composer-panel,
@@ -215,6 +216,7 @@ h2 {
 .control-panel,
 .quick-card,
 .mistake-panel,
+.parent-report-panel,
 .level-panel,
 .finger-panel,
 .composer-panel,
@@ -555,6 +557,79 @@ body.color-notes .target-note strong {
   border: 2px solid rgba(32, 36, 42, 0.08);
   border-radius: 999px 999px 18px 18px;
   z-index: 1;
+}
+
+.rhythm-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(32, 36, 42, 0.08);
+  border-radius: 8px;
+}
+
+.rhythm-panel strong,
+.rhythm-panel span {
+  display: block;
+}
+
+.rhythm-panel strong {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.rhythm-panel strong.timing-perfect {
+  color: var(--mint-strong);
+}
+
+.rhythm-panel strong.timing-early {
+  color: var(--coral-strong);
+}
+
+.rhythm-panel strong.timing-late {
+  color: var(--blue);
+}
+
+.rhythm-panel strong.timing-ready {
+  color: var(--ink);
+}
+
+.rhythm-panel div > span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.timing-score {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.timing-score span {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.timing-score b {
+  color: var(--blue);
+}
+
+body.metronome-flash .prompt-card {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sun) 70%, transparent);
 }
 
 .coach-text {
@@ -1281,6 +1356,41 @@ body.color-notes .note-chip.current {
   gap: 12px;
 }
 
+.parent-report-panel {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.parent-report-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.parent-report-card {
+  display: grid;
+  gap: 5px;
+  min-height: 86px;
+  padding: 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.parent-report-card span,
+.parent-report-card small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.parent-report-card strong {
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
 .mistake-list {
   display: flex;
   flex-wrap: wrap;
@@ -1441,6 +1551,10 @@ body.focus-mode .target-note strong {
     grid-template-columns: 1fr 1fr;
   }
 
+  .parent-report-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tempo-presets,
   .loop-controls {
     grid-column: 1 / -1;
@@ -1538,6 +1652,20 @@ body.focus-mode .target-note strong {
 
   .practice-options {
     grid-template-columns: 1fr;
+  }
+
+  .rhythm-panel,
+  .parent-report-list {
+    grid-template-columns: 1fr;
+  }
+
+  .timing-score {
+    justify-content: stretch;
+  }
+
+  .timing-score span {
+    flex: 1 1 88px;
+    justify-content: center;
   }
 
   .tempo-presets,

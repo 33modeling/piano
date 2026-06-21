@@ -84,6 +84,14 @@
             </button>
           </div>
         </div>
+
+        <div class="parent-report-panel" aria-label="부모 리포트">
+          <div class="section-title">
+            <p class="eyebrow">리포트</p>
+            <h2>오늘의 연습 기록</h2>
+          </div>
+          <div id="parentReportList" class="parent-report-list"></div>
+        </div>
       </section>
 
       <section class="practice-hero" aria-label="현재 연습">
@@ -106,6 +114,17 @@
             </div>
             <div id="targetNotes" class="target-notes" aria-live="polite"></div>
             <div id="handVisualizer" class="hand-visualizer" aria-label="손가락 위치"></div>
+            <div class="rhythm-panel" aria-label="박자 연습">
+              <div>
+                <strong id="timingFeedback">박자 준비</strong>
+                <span id="timingDetail">카운트 시작을 누르면 박자 점수를 기록합니다.</span>
+              </div>
+              <div class="timing-score">
+                <span>딱 <b id="perfectTimingCount">0</b></span>
+                <span>빠름 <b id="earlyTimingCount">0</b></span>
+                <span>늦음 <b id="lateTimingCount">0</b></span>
+              </div>
+            </div>
             <p id="coachText" class="coach-text">
               아래 피아노에서 같은 계이름을 눌러보세요.
             </p>
@@ -123,6 +142,12 @@
             </button>
             <button class="secondary-button" id="nextButton" type="button">
               다음
+            </button>
+            <button class="secondary-button" id="countInButton" type="button">
+              카운트 시작
+            </button>
+            <button class="secondary-button" id="metronomeButton" type="button">
+              메트로놈
             </button>
             <button class="secondary-button" id="warmupButton" type="button">
               손가락 워밍업
