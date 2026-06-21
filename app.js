@@ -1102,6 +1102,7 @@ function addPracticeSeconds(seconds) {
   state.dailyPracticeSeconds = Math.min(DAILY_TARGET_SECONDS, state.dailyPracticeSeconds + seconds);
   awardDailyStickerIfReady();
   renderDailyPractice();
+  renderParentReport();
   saveProgress();
 }
 
@@ -1679,6 +1680,7 @@ function metronomeTick() {
 
 function startMetronome() {
   if (state.metronomeTimerId || !window.setInterval) return;
+  clearCountIn({ keepRhythm: false });
   state.metronomeActive = true;
   state.rhythmActive = true;
   state.metronomeBeat = 0;
@@ -1689,14 +1691,19 @@ function startMetronome() {
   saveProgress();
 }
 
-function stopMetronome() {
+function stopMetronome({ keepRhythm = false } = {}) {
   state.metronomeActive = false;
   if (state.metronomeTimerId && window.clearInterval) {
     window.clearInterval(state.metronomeTimerId);
   }
   state.metronomeTimerId = null;
   state.metronomeBeat = 0;
-  setTimingFeedback("ready", "박자 준비", "메트로놈이 꺼졌습니다.");
+  if (!keepRhythm) {
+    state.rhythmActive = false;
+    state.stepDueAt = 0;
+    state.stepTimingRecorded = false;
+  }
+  setTimingFeedback("ready", "박자 준비", keepRhythm ? "카운트가 끝나면 첫 음을 눌러요." : "메트로놈이 꺼졌습니다.");
   renderPractice();
   saveProgress();
 }
@@ -1709,18 +1716,26 @@ function toggleMetronome() {
   }
 }
 
-function clearCountIn() {
+function clearCountIn({ keepRhythm = false } = {}) {
   if (state.countInTimerId && window.clearInterval) {
     window.clearInterval(state.countInTimerId);
   }
   state.countInTimerId = null;
   state.countInActive = false;
   state.countInRemaining = 0;
+  if (!keepRhythm) {
+    state.rhythmActive = false;
+    state.stepDueAt = 0;
+    state.stepTimingRecorded = false;
+  }
 }
 
 function startCountIn() {
   if (state.countInActive) return;
-  clearCountIn();
+  if (state.metronomeActive) {
+    stopMetronome({ keepRhythm: true });
+  }
+  clearCountIn({ keepRhythm: false });
   state.countInActive = true;
   state.countInRemaining = COUNT_IN_BEATS;
   state.rhythmActive = true;
@@ -1739,7 +1754,7 @@ function startCountIn() {
       return;
     }
 
-    clearCountIn();
+    clearCountIn({ keepRhythm: true });
     armRhythmStep(0);
     setTimingFeedback("ready", "시작", "지금 첫 음을 눌러보세요.");
     renderPractice();
@@ -1858,6 +1873,13 @@ function judgeNote(note) {
 
   const current = state.sequence[state.currentIndex];
   const expected = current.notes.map((item) => item.note);
+
+  if (state.countInActive) {
+    state.feedbackText = "카운트가 끝난 뒤 첫 음을 눌러요.";
+    setTimingFeedback("ready", `${state.countInRemaining}`, "아직 시작 전입니다.");
+    renderPractice();
+    return;
+  }
 
   if (state.pendingNotes.has(note)) {
     recordTimingHit();
