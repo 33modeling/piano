@@ -130,6 +130,12 @@ globalThis.__pianoSmoke = (() => {
   assert.ok(songs.filter((song) => !song.needsScore).every((song) => song.melody.length > 0));
   assert.equal(buildSequence(songs[0], 1).length, songs[0].melody.length);
   assert.ok(buildSequence(songs[0], 5).some((step) => step.notes.length > 1));
+  setTheme("rainbow");
+  assert.equal(state.theme, "rainbow");
+  setSoundStyle("bell");
+  assert.equal(state.soundStyle, "bell");
+  setSoundVolume(65);
+  assert.equal(state.soundVolume, 0.65);
   recordMistake(["D4", "D4"]);
   recordMistake(["F4"]);
   assert.equal(state.mistakes.D4, 1);

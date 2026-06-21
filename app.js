@@ -253,6 +253,52 @@ const levels = [
   },
 ];
 
+const SOUND_STYLES = {
+  soft: {
+    type: "triangle",
+    gain: 0.24,
+    attack: 0.025,
+    release: 0.18,
+    sustain: 0.82,
+    harmonics: [{ ratio: 1, gain: 1 }],
+  },
+  bright: {
+    type: "sawtooth",
+    gain: 0.16,
+    attack: 0.012,
+    release: 0.1,
+    sustain: 0.62,
+    harmonics: [
+      { ratio: 1, gain: 1 },
+      { ratio: 2, gain: 0.18 },
+    ],
+  },
+  bell: {
+    type: "sine",
+    gain: 0.22,
+    attack: 0.008,
+    release: 0.42,
+    sustain: 0.36,
+    harmonics: [
+      { ratio: 1, gain: 1 },
+      { ratio: 2.01, gain: 0.32 },
+      { ratio: 3.01, gain: 0.12 },
+    ],
+  },
+  synth: {
+    type: "square",
+    gain: 0.13,
+    attack: 0.018,
+    release: 0.22,
+    sustain: 0.72,
+    harmonics: [
+      { ratio: 1, gain: 1 },
+      { ratio: 0.5, gain: 0.22 },
+    ],
+  },
+};
+const THEME_IDS = ["clear", "pop", "rainbow", "night"];
+
 const state = {
   selectedSongId: "twinkle",
   level: 1,
@@ -277,6 +323,9 @@ const state = {
   reviewSong: null,
   mistakes: {},
   focusMode: false,
+  theme: "pop",
+  soundStyle: "soft",
+  soundVolume: 0.8,
 };
 
 const elements = {
@@ -294,6 +343,9 @@ const elements = {
   nextSuggestion: document.querySelector("#nextSuggestion"),
   quickStartButton: document.querySelector("#quickStartButton"),
   focusModeButton: document.querySelector("#focusModeButton"),
+  volumeSlider: document.querySelector("#volumeSlider"),
+  volumeValue: document.querySelector("#volumeValue"),
+  soundPreviewButton: document.querySelector("#soundPreviewButton"),
   playGuideButton: document.querySelector("#playGuideButton"),
   repeatButton: document.querySelector("#repeatButton"),
   nextButton: document.querySelector("#nextButton"),
@@ -587,6 +639,7 @@ function renderPractice() {
   elements.midiButton.classList.toggle("active-input", state.midiActive);
   elements.focusModeButton.textContent = state.focusMode ? "전체 보기" : "큰 화면";
   applyFocusMode();
+  renderSettings();
 
   if (!current) {
     elements.targetNotes.innerHTML = "";
@@ -893,6 +946,46 @@ function toggleFocusMode() {
   saveProgress();
 }
 
+function applyTheme() {
+  document.body?.setAttribute("data-theme", state.theme);
+}
+
+function renderSettings() {
+  applyTheme();
+  document.querySelectorAll("[data-theme-option]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.themeOption === state.theme);
+  });
+  document.querySelectorAll("[data-sound-style]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.soundStyle === state.soundStyle);
+  });
+  elements.volumeSlider.value = Math.round(state.soundVolume * 100);
+  elements.volumeValue.textContent = Math.round(state.soundVolume * 100);
+}
+
+function setTheme(theme) {
+  state.theme = THEME_IDS.includes(theme) ? theme : "pop";
+  renderSettings();
+  saveProgress();
+}
+
+function setSoundStyle(style) {
+  state.soundStyle = SOUND_STYLES[style] ? style : "soft";
+  renderSettings();
+  saveProgress();
+}
+
+function setSoundVolume(value) {
+  state.soundVolume = Math.min(1, Math.max(0.3, Number(value) / 100));
+  renderSettings();
+  saveProgress();
+}
+
+function previewSound() {
+  const current = state.sequence[state.currentIndex];
+  const note = current?.notes?.[0]?.note || "C4";
+  playNote(note, 0.55);
+}
+
 function updateKeyHighlights() {
   const expected = new Set(state.pendingNotes);
   document.querySelectorAll("[data-note]").forEach((key) => {
@@ -914,21 +1007,31 @@ function ensureAudioContext() {
 
 function playNote(note, duration = 0.4, when = 0) {
   const context = ensureAudioContext();
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
+  const style = SOUND_STYLES[state.soundStyle] || SOUND_STYLES.soft;
   const start = context.currentTime + when;
   const end = start + duration;
+  const baseFrequency = frequencyFor(note);
+  const masterGain = context.createGain();
+  const peakGain = style.gain * state.soundVolume;
+  const releaseStart = Math.max(start + style.attack + 0.02, end - style.release);
 
-  oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(frequencyFor(note), start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(0.24, start + 0.025);
-  gain.gain.exponentialRampToValueAtTime(0.0001, end);
+  masterGain.gain.setValueAtTime(0.0001, start);
+  masterGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peakGain), start + style.attack);
+  masterGain.gain.setValueAtTime(Math.max(0.0002, peakGain * style.sustain), releaseStart);
+  masterGain.gain.exponentialRampToValueAtTime(0.0001, end + style.release);
+  masterGain.connect(context.destination);
 
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start(start);
-  oscillator.stop(end + 0.02);
+  style.harmonics.forEach((harmonic) => {
+    const oscillator = context.createOscillator();
+    const harmonicGain = context.createGain();
+    oscillator.type = style.type;
+    oscillator.frequency.setValueAtTime(baseFrequency * harmonic.ratio, start);
+    harmonicGain.gain.setValueAtTime(harmonic.gain, start);
+    oscillator.connect(harmonicGain);
+    harmonicGain.connect(masterGain);
+    oscillator.start(start);
+    oscillator.stop(end + style.release + 0.03);
+  });
 }
 
 function playCurrentStep() {
@@ -1344,6 +1447,9 @@ function saveProgress() {
     reviewSong: state.reviewSong,
     mistakes: state.mistakes,
     focusMode: state.focusMode,
+    theme: state.theme,
+    soundStyle: state.soundStyle,
+    soundVolume: state.soundVolume,
   };
   localStorage.setItem("little-piano-progress", JSON.stringify(progress));
 }
@@ -1364,6 +1470,9 @@ function loadProgress() {
     state.reviewSong = progress.reviewSong || null;
     state.mistakes = progress.mistakes || {};
     state.focusMode = Boolean(progress.focusMode);
+    state.theme = THEME_IDS.includes(progress.theme) ? progress.theme : "pop";
+    state.soundStyle = SOUND_STYLES[progress.soundStyle] ? progress.soundStyle : "soft";
+    state.soundVolume = Number(progress.soundVolume) || 0.8;
   } catch {
     localStorage.removeItem("little-piano-progress");
   }
@@ -1418,11 +1527,27 @@ function bindEvents() {
   elements.resetProgressButton.addEventListener("click", resetProgress);
   elements.generateButton.addEventListener("click", generateCustom);
   elements.loadExampleButton.addEventListener("click", loadExample);
+  elements.soundPreviewButton.addEventListener("click", previewSound);
+
+  document.querySelectorAll("[data-theme-option]").forEach((button) => {
+    button.addEventListener("click", () => setTheme(button.dataset.themeOption));
+  });
+
+  document.querySelectorAll("[data-sound-style]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setSoundStyle(button.dataset.soundStyle);
+      previewSound();
+    });
+  });
 
   elements.tempoSlider.addEventListener("input", (event) => {
     state.tempo = Number(event.target.value);
     elements.tempoValue.textContent = state.tempo;
     saveProgress();
+  });
+
+  elements.volumeSlider.addEventListener("input", (event) => {
+    setSoundVolume(event.target.value);
   });
 
   document.querySelectorAll("[data-stage-mode]").forEach((button) => {
@@ -1461,6 +1586,7 @@ function bindEvents() {
 
 function init() {
   loadProgress();
+  applyTheme();
   const savedIndex = state.currentIndex;
   renderKeyboard();
   renderSongs();

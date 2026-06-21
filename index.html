@@ -131,6 +131,54 @@
         <div class="control-panel">
           <details class="control-group" open>
             <summary>
+              <span>앱 설정</span>
+              <small>테마와 사운드</small>
+            </summary>
+            <div class="settings-panel">
+              <div class="setting-block">
+                <strong>색상 테마</strong>
+                <div class="theme-grid" id="themeOptions" aria-label="색상 테마 선택">
+                  <button type="button" data-theme-option="clear">
+                    <span class="theme-swatch clear"></span>
+                    맑은 하늘
+                  </button>
+                  <button type="button" data-theme-option="pop">
+                    <span class="theme-swatch pop"></span>
+                    비비드 팝
+                  </button>
+                  <button type="button" data-theme-option="rainbow">
+                    <span class="theme-swatch rainbow"></span>
+                    무지개
+                  </button>
+                  <button type="button" data-theme-option="night">
+                    <span class="theme-swatch night"></span>
+                    밤하늘
+                  </button>
+                </div>
+              </div>
+
+              <div class="setting-block">
+                <strong>사운드 스타일</strong>
+                <div class="sound-grid" id="soundOptions" aria-label="사운드 스타일 선택">
+                  <button type="button" data-sound-style="soft">부드러운 피아노</button>
+                  <button type="button" data-sound-style="bright">반짝이는 건반</button>
+                  <button type="button" data-sound-style="bell">종소리</button>
+                  <button type="button" data-sound-style="synth">신스 리드</button>
+                </div>
+                <label class="volume-control" for="volumeSlider">
+                  <span>소리 크기</span>
+                  <input id="volumeSlider" type="range" min="30" max="100" value="80" />
+                  <strong id="volumeValue">80</strong>
+                </label>
+                <button class="secondary-button" id="soundPreviewButton" type="button">
+                  사운드 듣기
+                </button>
+              </div>
+            </div>
+          </details>
+
+          <details class="control-group" open>
+            <summary>
               <span>곡 고르기</span>
               <small>동요와 내 곡</small>
             </summary>
