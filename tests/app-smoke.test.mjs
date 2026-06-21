@@ -34,12 +34,26 @@ class FakeClassList {
   }
 }
 
+class FakeStyle {
+  constructor() {
+    this.values = {};
+  }
+
+  setProperty(name, value) {
+    this.values[name] = value;
+  }
+
+  removeProperty(name) {
+    delete this.values[name];
+  }
+}
+
 class FakeElement {
   constructor(selector) {
     this.selector = selector;
     this.classList = new FakeClassList();
     this.dataset = {};
-    this.style = {};
+    this.style = new FakeStyle();
     this.value = "";
     this.textContent = "";
     this.innerHTML = "";
@@ -142,6 +156,18 @@ globalThis.__pianoSmoke = (() => {
   assert.ok(songs.filter((song) => !song.needsScore).every((song) => song.melody.length > 0));
   assert.equal(buildSequence(songs[0], 1).length, songs[0].melody.length);
   assert.ok(buildSequence(songs[0], 5).some((step) => step.notes.length > 1));
+  assert.equal(fingerColorFor(4), "#4d96ff");
+  const warmupSong = buildWarmupSong(0);
+  assert.equal(warmupSong.type, "warmup");
+  assert.deepEqual(buildSequence(warmupSong, 1).map((step) => step.notes[0].finger), [1, 2, 3, 4, 5]);
+  startFingerWarmup();
+  assert.equal(state.selectedSongId, "warmup");
+  assert.equal(getCurrentSong().type, "warmup");
+  nextWarmupDrill();
+  assert.equal(state.warmupDrillIndex, 1);
+  assert.equal(getCurrentSong().warmupDrillId, "left-up");
+  startFingerWarmup();
+  assert.equal(state.selectedSongId, "twinkle");
   setTheme("rainbow");
   assert.equal(state.theme, "rainbow");
   setSoundStyle("bell");

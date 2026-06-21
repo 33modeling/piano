@@ -105,6 +105,7 @@
               <span id="beatBadge" class="badge neutral">1박</span>
             </div>
             <div id="targetNotes" class="target-notes" aria-live="polite"></div>
+            <div id="handVisualizer" class="hand-visualizer" aria-label="손가락 위치"></div>
             <p id="coachText" class="coach-text">
               아래 피아노에서 같은 계이름을 눌러보세요.
             </p>
@@ -122,6 +123,12 @@
             </button>
             <button class="secondary-button" id="nextButton" type="button">
               다음
+            </button>
+            <button class="secondary-button" id="warmupButton" type="button">
+              손가락 워밍업
+            </button>
+            <button class="ghost-button" id="warmupNextButton" type="button">
+              다음 드릴
             </button>
             <button class="secondary-button" id="micButton" type="button">
               마이크
@@ -238,19 +245,19 @@
             <div class="finger-guide">
               <div>
                 <strong>오른손</strong>
-                <span>1 엄지</span>
-                <span>2 검지</span>
-                <span>3 중지</span>
-                <span>4 약지</span>
-                <span>5 새끼</span>
+                <span style="--finger-color: #ff5f7e">1 엄지</span>
+                <span style="--finger-color: #ffca3a">2 검지</span>
+                <span style="--finger-color: #6bd66f">3 중지</span>
+                <span style="--finger-color: #4d96ff">4 약지</span>
+                <span style="--finger-color: #b967ff">5 새끼</span>
               </div>
               <div>
                 <strong>왼손</strong>
-                <span>1 엄지</span>
-                <span>2 검지</span>
-                <span>3 중지</span>
-                <span>4 약지</span>
-                <span>5 새끼</span>
+                <span style="--finger-color: #ff5f7e">1 엄지</span>
+                <span style="--finger-color: #ffca3a">2 검지</span>
+                <span style="--finger-color: #6bd66f">3 중지</span>
+                <span style="--finger-color: #4d96ff">4 약지</span>
+                <span style="--finger-color: #b967ff">5 새끼</span>
               </div>
             </div>
             <div id="sequencePreview" class="sequence-preview"></div>

@@ -69,6 +69,13 @@ const FINGER_NAMES = {
   4: "약지",
   5: "새끼",
 };
+const FINGER_COLORS = {
+  1: "#ff5f7e",
+  2: "#ffca3a",
+  3: "#6bd66f",
+  4: "#4d96ff",
+  5: "#b967ff",
+};
 const NOTE_COLORS = {
   C: "#ff5f7e",
   "C#": "#ff7f50",
@@ -86,6 +93,32 @@ const NOTE_COLORS = {
 const BASE_TEMPO = 100;
 const TEMPO_PRESETS = [50, 75, 100];
 const DAILY_TARGET_SECONDS = 180;
+const WARMUP_DRILLS = [
+  {
+    id: "right-up",
+    title: "오른손 1-2-3-4-5",
+    summary: "오른손 차례가기",
+    hand: "right",
+    notes: ["C4", "D4", "E4", "F4", "G4"],
+    fingers: [1, 2, 3, 4, 5],
+  },
+  {
+    id: "left-up",
+    title: "왼손 5-4-3-2-1",
+    summary: "왼손 차례가기",
+    hand: "left",
+    notes: ["C3", "D3", "E3", "F3", "G3"],
+    fingers: [5, 4, 3, 2, 1],
+  },
+  {
+    id: "weak-34",
+    title: "3-4 손가락 힘주기",
+    summary: "약한 손가락 반복",
+    hand: "right",
+    notes: ["E4", "F4", "E4", "F4", "G4", "F4", "E4"],
+    fingers: [3, 4, 3, 4, 5, 4, 3],
+  },
+];
 const RIGHT_FINGERS = {
   C: 1,
   D: 2,
@@ -355,6 +388,9 @@ const state = {
   dailyPracticeActive: false,
   dailyRewardedDate: "",
   stickers: [],
+  warmupSong: null,
+  warmupDrillIndex: 0,
+  warmupReturn: null,
   timerId: null,
 };
 
@@ -367,6 +403,7 @@ const elements = {
   fingerBadge: document.querySelector("#fingerBadge"),
   beatBadge: document.querySelector("#beatBadge"),
   targetNotes: document.querySelector("#targetNotes"),
+  handVisualizer: document.querySelector("#handVisualizer"),
   coachText: document.querySelector("#coachText"),
   progressFill: document.querySelector("#progressFill"),
   promptCard: document.querySelector("#promptCard"),
@@ -386,6 +423,8 @@ const elements = {
   playGuideButton: document.querySelector("#playGuideButton"),
   repeatButton: document.querySelector("#repeatButton"),
   nextButton: document.querySelector("#nextButton"),
+  warmupButton: document.querySelector("#warmupButton"),
+  warmupNextButton: document.querySelector("#warmupNextButton"),
   micButton: document.querySelector("#micButton"),
   midiButton: document.querySelector("#midiButton"),
   listenStatus: document.querySelector("#listenStatus"),
@@ -449,6 +488,9 @@ function getCurrentSong() {
   if (state.selectedSongId === "review" && state.reviewSong) {
     return state.reviewSong;
   }
+  if (state.selectedSongId === "warmup" && state.warmupSong) {
+    return state.warmupSong;
+  }
   return songs.find((song) => song.id === state.selectedSongId) || songs[0];
 }
 
@@ -490,6 +532,14 @@ function noteColorStyle(note) {
   return `--note-color: ${noteColorFor(note)}`;
 }
 
+function fingerColorFor(finger) {
+  return FINGER_COLORS[finger] || FINGER_COLORS[1];
+}
+
+function fingerColorStyle(finger) {
+  return `--finger-color: ${fingerColorFor(finger)}`;
+}
+
 function handText(hand) {
   if (hand === "left") return "왼손";
   if (hand === "both") return "양손";
@@ -507,11 +557,11 @@ function fingerText(note, hand) {
   return `${finger}번 ${FINGER_NAMES[finger]}`;
 }
 
-function createPracticeNote(note, hand) {
+function createPracticeNote(note, hand, finger = fingerFor(note, hand)) {
   return {
     note,
     hand,
-    finger: fingerFor(note, hand),
+    finger,
   };
 }
 
@@ -562,6 +612,14 @@ function getPlayableNotes() {
 }
 
 function buildSequence(song, level) {
+  if (song.type === "warmup") {
+    return song.melody.map((item) => ({
+      ...item,
+      notes: [createPracticeNote(item.note, item.hand || "right", item.finger)],
+      warmup: true,
+    }));
+  }
+
   if (level === 1) {
     return song.melody.map((item) => ({
       ...item,
@@ -625,7 +683,6 @@ function resetPendingNotes() {
 function loadCurrentSong(startIndex = 0) {
   const song = getCurrentSong();
   elements.currentSongTitle.textContent = song.title;
-  state.feedbackText = "";
   setSequence(buildSequence(song, state.level), startIndex);
   if (song.needsScore) {
     elements.customTitle.value = song.title;
@@ -640,6 +697,7 @@ function renderSongs() {
   const songItems = [...songs];
   if (state.customSong) songItems.push(state.customSong);
   if (state.reviewSong) songItems.push(state.reviewSong);
+  if (state.warmupSong) songItems.push(state.warmupSong);
   elements.songList.innerHTML = songItems
     .map((song) => {
       const active = song.id === state.selectedSongId ? " active" : "";
@@ -697,6 +755,7 @@ function renderPractice() {
 
   if (!current) {
     elements.targetNotes.innerHTML = "";
+    elements.handVisualizer.innerHTML = "";
     elements.coachText.textContent = "악보나 계이름을 입력하면 연습을 시작할 수 있습니다.";
     updateKeyHighlights();
     renderStageTrack();
@@ -714,14 +773,17 @@ function renderPractice() {
     current.notes.length > 1
       ? "차례대로 누르기"
       : `${current.notes[0].finger}번 ${FINGER_NAMES[current.notes[0].finger]}`;
+  elements.fingerBadge.style.setProperty("--finger-color", fingerColorFor(current.notes[0].finger));
   elements.beatBadge.textContent = `${current.duration}박`;
-  elements.coachText.textContent = state.feedbackText || level.coach;
+  elements.coachText.textContent =
+    state.feedbackText || (current.warmup ? "색깔 손가락을 보고 손 모양 그대로 눌러요." : level.coach);
 
   elements.targetNotes.innerHTML = current.notes
     .map((item) => {
       const done = state.completedNotes.has(item.note) ? " done" : "";
       return `
-        <div class="target-note${done}" style="${noteColorStyle(item.note)}">
+        <div class="target-note${done}" style="${noteColorStyle(item.note)}; ${fingerColorStyle(item.finger)}">
+          <span class="finger-dot">${item.finger}</span>
           <strong>${escapeHtml(plainSolfege(item.note))}</strong>
           <span>${escapeHtml(handText(item.hand))} ${item.finger}번 · ${escapeHtml(item.note)}</span>
         </div>
@@ -729,6 +791,7 @@ function renderPractice() {
     })
     .join("");
 
+  renderHandVisualizer(current);
   updateKeyHighlights();
   renderStageTrack();
   renderMissions();
@@ -744,6 +807,53 @@ function renderSequencePreview() {
       const label = step.notes.map((item) => plainSolfege(item.note)).join("+");
       const color = step.notes[0] ? noteColorStyle(step.notes[0].note) : "";
       return `<span class="note-chip${current}" style="${color}">${escapeHtml(label)}<small>${step.duration}박</small></span>`;
+    })
+    .join("");
+}
+
+function renderHandVisualizer(step) {
+  if (!elements.handVisualizer) return;
+
+  const activeByHand = step.notes.reduce(
+    (groups, item) => {
+      groups[item.hand].add(item.finger);
+      return groups;
+    },
+    { left: new Set(), right: new Set() },
+  );
+  const handOrder = activeByHand.left.size && activeByHand.right.size ? ["left", "right"] : [step.notes[0].hand];
+
+  elements.handVisualizer.innerHTML = handOrder
+    .map((hand) => {
+      const order = hand === "left" ? [5, 4, 3, 2, 1] : [1, 2, 3, 4, 5];
+      const active = activeByHand[hand];
+      const activeLabel = order
+        .filter((finger) => active.has(finger))
+        .map((finger) => `${finger}번`)
+        .join(" + ");
+
+      return `
+        <div class="hand-card ${hand}">
+          <div class="hand-title">
+            <strong>${escapeHtml(handText(hand))}</strong>
+            <span>${escapeHtml(activeLabel || "준비")}</span>
+          </div>
+          <div class="hand-shape" aria-hidden="true">
+            ${order
+              .map((finger) => {
+                const activeClass = active.has(finger) ? " active" : "";
+                return `
+                  <span class="hand-finger finger-${finger}${activeClass}" style="${fingerColorStyle(finger)}">
+                    <b>${finger}</b>
+                    <small>${escapeHtml(FINGER_NAMES[finger])}</small>
+                  </span>
+                `;
+              })
+              .join("")}
+            <span class="hand-palm"></span>
+          </div>
+        </div>
+      `;
     })
     .join("");
 }
@@ -1042,11 +1152,15 @@ function renderPracticeOptions() {
   const loopStartLabel = total ? state.loopStart + 1 : 0;
   const loopEndLabel = total ? loopEnd + 1 : 0;
   const loopPrefix = state.loopEnabled ? "반복 중" : "구간";
+  const warmingUp = state.selectedSongId === "warmup";
 
   elements.waitModeButton.textContent = state.waitMode ? "기다려줘 켬" : "엄격 판정";
   elements.waitModeButton.classList.toggle("active", state.waitMode);
   elements.colorNotesButton.textContent = state.colorNotes ? "색깔 계이름 켬" : "색깔 계이름 끔";
   elements.colorNotesButton.classList.toggle("active", state.colorNotes);
+  elements.warmupButton.textContent = warmingUp ? "곡으로 돌아가기" : "손가락 워밍업";
+  elements.warmupButton.classList.toggle("active-input", warmingUp);
+  elements.warmupNextButton.disabled = !warmingUp;
   elements.loopRangeLabel.textContent = total
     ? `${loopPrefix} ${loopStartLabel}-${loopEndLabel} / ${total}`
     : "전체 구간";
@@ -1139,6 +1253,79 @@ function quickStart() {
 
   saveProgress();
   document.querySelector(".lesson-panel")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+function buildWarmupSong(drillIndex = state.warmupDrillIndex) {
+  const index = ((Number(drillIndex) || 0) + WARMUP_DRILLS.length) % WARMUP_DRILLS.length;
+  const drill = WARMUP_DRILLS[index];
+  const melodyItems = drill.notes.map((note, itemIndex) => ({
+    note,
+    hand: drill.hand,
+    finger: drill.fingers[itemIndex] || 1,
+    duration: itemIndex === drill.notes.length - 1 ? 2 : 1,
+    measure: Math.floor(itemIndex / 4) + 1,
+    beat: (itemIndex % 4) + 1,
+  }));
+
+  return {
+    id: "warmup",
+    title: `손가락 워밍업`,
+    mark: "손",
+    range: drill.title,
+    key: "C",
+    type: "warmup",
+    warmupDrillId: drill.id,
+    description: drill.summary,
+    melody: melodyItems,
+  };
+}
+
+function startFingerWarmup() {
+  if (state.selectedSongId === "warmup") {
+    returnFromWarmup();
+    return;
+  }
+
+  state.warmupReturn = {
+    selectedSongId: state.selectedSongId,
+    level: state.level,
+    currentIndex: state.currentIndex,
+  };
+  state.warmupSong = buildWarmupSong();
+  state.selectedSongId = "warmup";
+  state.currentIndex = 0;
+  state.stageMode = "teach";
+  state.feedbackText = "손가락 색깔과 번호를 먼저 맞춰보고 곡으로 들어가요.";
+  resetLoopRange();
+  loadCurrentSong();
+  saveProgress();
+  document.querySelector(".lesson-panel")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+function nextWarmupDrill() {
+  state.warmupDrillIndex = (state.warmupDrillIndex + 1) % WARMUP_DRILLS.length;
+  state.warmupSong = buildWarmupSong();
+  state.currentIndex = 0;
+  state.stageMode = "teach";
+  state.feedbackText = `${WARMUP_DRILLS[state.warmupDrillIndex].title} 드릴로 바꿨어요.`;
+  if (state.selectedSongId !== "warmup") {
+    state.selectedSongId = "warmup";
+  }
+  resetLoopRange();
+  loadCurrentSong();
+  saveProgress();
+}
+
+function returnFromWarmup() {
+  const target = state.warmupReturn || { selectedSongId: "twinkle", level: state.level, currentIndex: 0 };
+  state.selectedSongId = target.selectedSongId || "twinkle";
+  state.level = target.level || state.level;
+  state.currentIndex = target.currentIndex || 0;
+  state.warmupReturn = null;
+  state.feedbackText = "워밍업을 마치고 곡 연습으로 돌아왔어요.";
+  resetLoopRange();
+  loadCurrentSong(state.currentIndex);
+  saveProgress();
 }
 
 function applyFocusMode() {
@@ -1299,9 +1486,20 @@ function previewSound() {
 
 function updateKeyHighlights() {
   const expected = new Set(state.pendingNotes);
+  const current = state.sequence[state.currentIndex];
+  const currentNotes = current?.notes || [];
   document.querySelectorAll("[data-note]").forEach((key) => {
     const note = key.dataset.note;
-    key.classList.toggle("expected", expected.has(note));
+    const target = currentNotes.find((item) => item.note === note && expected.has(note));
+    key.classList.toggle("expected", Boolean(target));
+    key.classList.toggle("finger-target", Boolean(target));
+    if (target) {
+      key.dataset.finger = `${target.finger}번`;
+      key.style?.setProperty?.("--finger-color", fingerColorFor(target.finger));
+    } else {
+      delete key.dataset.finger;
+      key.style?.removeProperty?.("--finger-color");
+    }
   });
 }
 
@@ -1796,6 +1994,9 @@ function saveProgress() {
     dailyPracticeSeconds: state.dailyPracticeSeconds,
     dailyRewardedDate: state.dailyRewardedDate,
     stickers: state.stickers,
+    warmupSong: state.warmupSong,
+    warmupDrillIndex: state.warmupDrillIndex,
+    warmupReturn: state.warmupReturn,
   };
   localStorage.setItem("little-piano-progress", JSON.stringify(progress));
 }
@@ -1830,6 +2031,12 @@ function loadProgress() {
     state.dailyPracticeActive = false;
     state.dailyRewardedDate = progress.dailyRewardedDate || "";
     state.stickers = Array.isArray(progress.stickers) ? progress.stickers.slice(0, 24) : [];
+    state.warmupSong = progress.warmupSong || null;
+    state.warmupDrillIndex = Number(progress.warmupDrillIndex) || 0;
+    state.warmupReturn = progress.warmupReturn || null;
+    if (state.selectedSongId === "warmup" && !state.warmupSong) {
+      state.warmupSong = buildWarmupSong();
+    }
     ensureDailyPracticeDate();
   } catch {
     localStorage.removeItem("little-piano-progress");
@@ -1886,6 +2093,8 @@ function bindEvents() {
   elements.nextButton.addEventListener("click", nextStep);
   elements.quickStartButton.addEventListener("click", quickStart);
   elements.focusModeButton.addEventListener("click", toggleFocusMode);
+  elements.warmupButton.addEventListener("click", startFingerWarmup);
+  elements.warmupNextButton.addEventListener("click", nextWarmupDrill);
   elements.waitModeButton.addEventListener("click", toggleWaitMode);
   elements.colorNotesButton.addEventListener("click", toggleColorNotes);
   elements.loopStartButton.addEventListener("click", () => setLoopBoundary("start"));
