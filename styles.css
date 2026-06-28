@@ -388,7 +388,7 @@ h2 {
   position: relative;
   min-width: 98px;
   padding: 12px;
-  color: #111318;
+  color: var(--ink);
   background: var(--paper);
   border: 2px solid transparent;
   border-radius: 8px;
@@ -635,7 +635,7 @@ body.metronome-flash .prompt-card {
 .coach-text {
   min-height: 28px;
   margin: 0;
-  color: #354052;
+  color: var(--ink);
   font-weight: 800;
 }
 
@@ -786,7 +786,7 @@ body.metronome-flash .prompt-card {
   min-width: 74px;
   padding: 10px;
   color: #fff;
-  background: var(--ink);
+  background: #20242a;
   border-radius: 8px;
   text-align: center;
   font-size: 1.4rem;
@@ -1342,7 +1342,7 @@ body.color-notes .note-chip.current {
 }
 
 .mission-card strong {
-  color: #28313d;
+  color: var(--ink);
 }
 
 .mission-card span {
@@ -1454,7 +1454,7 @@ body.color-notes .note-chip.current {
 }
 
 .composer-form label {
-  color: #354052;
+  color: var(--ink);
   font-weight: 900;
 }
 
@@ -1915,8 +1915,29 @@ body.color-notes .sheet-note.current {
   }
 }
 
+.section-title {
+  margin-bottom: 4px;
+}
+
+/* 밤하늘 테마: 밝은 반투명 표면을 어둡게 바꿔 흰 글자가 보이게 한다 */
+body[data-theme="night"] .badge.neutral,
+body[data-theme="night"] .rhythm-panel,
+body[data-theme="night"] .hand-card {
+  background: color-mix(in srgb, var(--paper) 80%, #000);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* OS 동작 최소화 설정 존중: 박자 플래시·튕김·손가락 애니메이션을 끈다 */
 @media (prefers-reduced-motion: reduce) {
-  .view.active {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  body.metronome-flash .prompt-card {
+    box-shadow: var(--shadow);
   }
 }

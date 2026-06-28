@@ -13,23 +13,20 @@ const CHROMATIC = [
   "A#",
   "B",
 ];
+// 모든 음은 생성 전에 flatToSharp 로 올림표(sharp)로 정규화되므로
+// 내림표(flat) 음이름은 조회되지 않는다. 따라서 자연음/올림음만 둔다.
 const SOLFEGE = {
   C: "도",
   "C#": "도#",
-  Db: "레♭",
   D: "레",
   "D#": "레#",
-  Eb: "미♭",
   E: "미",
   F: "파",
   "F#": "파#",
-  Gb: "솔♭",
   G: "솔",
   "G#": "솔#",
-  Ab: "라♭",
   A: "라",
   "A#": "라#",
-  Bb: "시♭",
   B: "시",
 };
 const HANGUL_TO_NOTE = {
@@ -305,6 +302,14 @@ const levels = [
 ];
 
 const SOUND_STYLES = {
+  click: {
+    type: "square",
+    gain: 0.2,
+    attack: 0.002,
+    release: 0.03,
+    sustain: 0.4,
+    harmonics: [{ ratio: 1, gain: 1 }],
+  },
   soft: {
     type: "triangle",
     gain: 0.24,
@@ -365,6 +370,7 @@ const state = {
   micAnalyser: null,
   micFrameId: null,
   micActive: false,
+  micStarting: false,
   midiAccess: null,
   midiActive: false,
   lastRecognized: { note: "", time: 0 },
@@ -406,6 +412,7 @@ const state = {
   metronomeActive: false,
   metronomeTimerId: null,
   metronomeBeat: 0,
+  nextTickAt: 0,
   warmupSong: null,
   warmupDrillIndex: 0,
   warmupReturn: null,
@@ -540,11 +547,6 @@ function splitNote(note) {
   return { pitch: `${letter}${accidental}`, letter, accidental, octave };
 }
 
-function solfegeFor(note) {
-  const { pitch, octave } = splitNote(note);
-  return `${SOLFEGE[pitch] || pitch}${octave}`;
-}
-
 function plainSolfege(note) {
   const { pitch } = splitNote(note);
   return SOLFEGE[pitch] || pitch;
@@ -577,11 +579,6 @@ function fingerFor(note, hand) {
   const { letter } = splitNote(note);
   const map = hand === "left" ? LEFT_FINGERS : RIGHT_FINGERS;
   return map[letter] || 1;
-}
-
-function fingerText(note, hand) {
-  const finger = fingerFor(note, hand);
-  return `${finger}번 ${FINGER_NAMES[finger]}`;
 }
 
 function createPracticeNote(note, hand, finger = fingerFor(note, hand)) {
@@ -619,7 +616,7 @@ function fifthFor(root) {
   return fifths[root] || "G3";
 }
 
-function getPlayableNotes() {
+function getWhiteNotes() {
   const notes = [];
   for (let octave = 3; octave <= 6; octave += 1) {
     NOTE_NAMES.forEach((letter) => {
@@ -627,6 +624,11 @@ function getPlayableNotes() {
       if (getPitch(note) <= getPitch("C6")) notes.push(note);
     });
   }
+  return notes;
+}
+
+function getPlayableNotes() {
+  const notes = [...getWhiteNotes()];
   CHROMATIC.forEach((pitch) => {
     for (let octave = 3; octave <= 5; octave += 1) {
       const note = `${pitch}${octave}`;
@@ -639,6 +641,7 @@ function getPlayableNotes() {
 }
 
 function buildSequence(song, level) {
+  if (!song || !Array.isArray(song.melody)) return [];
   if (song.type === "warmup") {
     return song.melody.map((item) => ({
       ...item,
@@ -655,9 +658,17 @@ function buildSequence(song, level) {
   }
 
   if (level === 2) {
+    // 멜로디의 모든 음을 한 옥타브 내릴 수 있을 때만 균일하게 내린다.
+    // 옥타브3 음(예: G3)은 더 내려갈 수 없어 그대로 남으면 음정 구조가
+    // 깨지므로, 그런 곡은 옥타브를 유지해 멜로디 윤곽을 보존한다.
+    const canShiftAll = song.melody.every(
+      (item) => transposeOctave(item.note, -1) !== item.note,
+    );
     return song.melody.map((item) => ({
       ...item,
-      notes: [createPracticeNote(transposeOctave(item.note, -1), "left")],
+      notes: [
+        createPracticeNote(canShiftAll ? transposeOctave(item.note, -1) : item.note, "left"),
+      ],
     }));
   }
 
@@ -683,7 +694,17 @@ function buildSequence(song, level) {
     const root = harmonicRoot(item.note);
     const notes = [createPracticeNote(item.note, "right")];
     if (item.beat === 1 || item.beat === 3) {
-      notes.unshift(createPracticeNote(root, "left"), createPracticeNote(fifthFor(root), "left"));
+      // 멜로디 음과 겹치는 왼손 음(예: 멜로디 D4 위의 5도 D4)은 빼서
+      // 화면 표시(타일/손가락)와 pendingNotes Set 개수를 일치시킨다.
+      const have = new Set(notes.map((noteItem) => noteItem.note));
+      const leftNotes = [];
+      [root, fifthFor(root)].forEach((leftNote) => {
+        if (!have.has(leftNote)) {
+          leftNotes.push(createPracticeNote(leftNote, "left"));
+          have.add(leftNote);
+        }
+      });
+      notes.unshift(...leftNotes);
     }
     return { ...item, notes };
   });
@@ -897,13 +918,7 @@ function renderHandVisualizer(step) {
 }
 
 function renderKeyboard() {
-  const whiteNotes = [];
-  for (let octave = 3; octave <= 6; octave += 1) {
-    NOTE_NAMES.forEach((letter) => {
-      const note = `${letter}${octave}`;
-      if (getPitch(note) <= getPitch("C6")) whiteNotes.push(note);
-    });
-  }
+  const whiteNotes = getWhiteNotes();
 
   const blackNotes = [];
   whiteNotes.forEach((note, index) => {
@@ -973,7 +988,9 @@ function renderStageTrack() {
   }
 
   document.querySelectorAll("[data-stage-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.stageMode === state.stageMode);
+    const selected = button.dataset.stageMode === state.stageMode;
+    button.classList.toggle("active", selected);
+    button.setAttribute?.("aria-selected", String(selected));
   });
 }
 
@@ -1027,9 +1044,10 @@ function todayKey(date = new Date()) {
 function ensureDailyPracticeDate() {
   const today = todayKey();
   if (state.dailyPracticeDate === today) return;
+  // 자정을 넘기면 오늘 목표는 0으로 리셋하되, 진행 중인 세션은
+  // 강제로 끄지 않고 새 날의 목표를 향해 계속 카운트되게 둔다.
   state.dailyPracticeDate = today;
   state.dailyPracticeSeconds = 0;
-  state.dailyPracticeActive = false;
 }
 
 function formatPracticeTime(seconds) {
@@ -1624,6 +1642,12 @@ function beatMs() {
   return 60000 / Math.max(40, state.tempo);
 }
 
+function outputLatencyMs() {
+  const ctx = state.audioContext;
+  if (!ctx) return 0;
+  return (ctx.outputLatency || ctx.baseLatency || 0) * 1000;
+}
+
 function setTimingFeedback(kind, label, detail) {
   state.timingFeedback = { kind, label, detail };
   renderRhythmPanel();
@@ -1631,7 +1655,17 @@ function setTimingFeedback(kind, label, detail) {
 
 function armRhythmStep(delayMs = beatMs()) {
   state.rhythmActive = true;
-  state.stepDueAt = Date.now() + delayMs;
+  const latency = outputLatencyMs();
+  if (state.metronomeActive && state.nextTickAt) {
+    // 메트로놈이 켜져 있으면 다음 실제 클릭 시각에 목표를 스냅한다.
+    // 그래야 "딱 맞음"이 아이가 듣는 박자에 맞췄다는 뜻이 된다.
+    let due = state.nextTickAt;
+    const now = Date.now();
+    while (due <= now + 1) due += beatMs();
+    state.stepDueAt = due + latency;
+  } else {
+    state.stepDueAt = Date.now() + delayMs + latency;
+  }
   state.stepTimingRecorded = false;
   setTimingFeedback("ready", "박자 준비", "다음 박자에 맞춰 눌러보세요.");
 }
@@ -1671,7 +1705,8 @@ function maybeAwardRhythmSticker() {
 
 function playMetronomeClick(accent = false) {
   const note = accent ? "C6" : "G5";
-  playNote(note, accent ? 0.08 : 0.05);
+  // 선택한 악기 음색(긴 릴리즈) 대신 짧고 또렷한 전용 클릭음을 쓴다.
+  playNote(note, accent ? 0.05 : 0.04, 0, "click");
 }
 
 function flashMetronome() {
@@ -1685,26 +1720,42 @@ function metronomeTick() {
   flashMetronome();
 }
 
+function scheduleMetronomeTick() {
+  if (!window.setTimeout) return;
+  const delay = Math.max(0, state.nextTickAt - Date.now());
+  state.metronomeTimerId = window.setTimeout(() => {
+    if (!state.metronomeActive) return; // 정지 직후 대기 중이던 콜백이 메트로놈을 되살리지 않게
+    metronomeTick();
+    state.nextTickAt += beatMs();
+    scheduleMetronomeTick();
+  }, delay);
+}
+
 function startMetronome() {
-  if (state.metronomeTimerId || !window.setInterval) return;
+  if (state.metronomeTimerId || !window.setTimeout) return;
   clearCountIn({ keepRhythm: false });
   state.metronomeActive = true;
   state.rhythmActive = true;
   state.metronomeBeat = 0;
-  armRhythmStep();
+  // 자가 보정 스케줄러: 각 틱을 절대 시각 기준으로 다시 잡아 누적 드리프트를 막는다.
+  state.nextTickAt = Date.now();
   metronomeTick();
-  state.metronomeTimerId = window.setInterval(metronomeTick, beatMs());
+  state.nextTickAt += beatMs();
+  scheduleMetronomeTick();
+  armRhythmStep();
   renderPractice();
   saveProgress();
 }
 
 function stopMetronome({ keepRhythm = false } = {}) {
   state.metronomeActive = false;
-  if (state.metronomeTimerId && window.clearInterval) {
-    window.clearInterval(state.metronomeTimerId);
+  if (state.metronomeTimerId) {
+    window.clearTimeout?.(state.metronomeTimerId);
+    window.clearInterval?.(state.metronomeTimerId);
   }
   state.metronomeTimerId = null;
   state.metronomeBeat = 0;
+  state.nextTickAt = 0;
   if (!keepRhythm) {
     state.rhythmActive = false;
     state.stepDueAt = 0;
@@ -1805,9 +1856,9 @@ function ensureAudioContext() {
   return state.audioContext;
 }
 
-function playNote(note, duration = 0.4, when = 0) {
+function playNote(note, duration = 0.4, when = 0, styleName = state.soundStyle) {
   const context = ensureAudioContext();
-  const style = SOUND_STYLES[state.soundStyle] || SOUND_STYLES.soft;
+  const style = SOUND_STYLES[styleName] || SOUND_STYLES.soft;
   const start = context.currentTime + when;
   const end = start + duration;
   const baseFrequency = frequencyFor(note);
@@ -1817,7 +1868,7 @@ function playNote(note, duration = 0.4, when = 0) {
 
   masterGain.gain.setValueAtTime(0.0001, start);
   masterGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peakGain), start + style.attack);
-  masterGain.gain.setValueAtTime(Math.max(0.0002, peakGain * style.sustain), releaseStart);
+  masterGain.gain.linearRampToValueAtTime(Math.max(0.0002, peakGain * style.sustain), releaseStart);
   masterGain.gain.exponentialRampToValueAtTime(0.0001, end + style.release);
   masterGain.connect(context.destination);
 
@@ -1877,6 +1928,10 @@ function handleNotePress(note) {
 
 function judgeNote(note) {
   if (!state.sequence.length) return;
+  // 한 스텝을 막 끝낸 직후(다음 스텝으로 넘어가기 전 420ms) 들어온 입력은
+  // 무시한다. 그러지 않으면 빠르게 치는 아이가 직전 스텝에 대해
+  // 거짓 실수가 기록되고 연속(streak)이 초기화된다.
+  if (Date.now() < state.recognitionLockUntil) return;
 
   const current = state.sequence[state.currentIndex];
   const expected = current.notes.map((item) => item.note);
@@ -1927,10 +1982,12 @@ function judgeNote(note) {
   }
 }
 
-function handleDetectedNote(note) {
+function handleDetectedNote(note, source = "mic") {
   const now = Date.now();
   if (now < state.recognitionLockUntil) return;
-  if (state.lastRecognized.note === note && now - state.lastRecognized.time < 700) return;
+  // 마이크는 한 음을 매 프레임 다시 감지하므로 같은 음 디바운스가 필요하지만,
+  // MIDI note-on은 이미 개별 이벤트라 디바운스하면 같은 음 반복('도 도')이 막힌다.
+  if (source !== "midi" && state.lastRecognized.note === note && now - state.lastRecognized.time < 700) return;
 
   markPracticeActivity();
   state.lastRecognized = { note, time: now };
@@ -1972,7 +2029,9 @@ function parseNoteToken(rawToken, defaultOctave = 4) {
   if (!cleaned || cleaned === "-" || cleaned.toLowerCase() === "rest") return null;
 
   const token = cleaned.replace(/\/\d+$/, "");
-  const octaveMatch = token.match(/(\d)$/);
+  // 끝자리 숫자는 옥타브로 떼어낸다 — 단, 한 글자(예: "1")뿐인 토큰은
+  // 숫자보 계이름(1~7)이므로 옥타브로 보지 않는다.
+  const octaveMatch = token.length > 1 ? token.match(/(\d)$/) : null;
   const octave = octaveMatch ? Number(octaveMatch[1]) : defaultOctave;
   let body = octaveMatch ? token.slice(0, -1) : token;
   let accidental = "";
@@ -2003,6 +2062,8 @@ function parseNoteToken(rawToken, defaultOctave = 4) {
 
   let pitch = `${letter}${accidental}`;
   if (accidental === "b") {
+    // Cb(=B), Fb(=E)는 옥타브까지 내려가야 정확해서 범위 밖으로 보고 거부한다.
+    if (letter === "C" || letter === "F") return null;
     pitch = flatToSharp(letter);
   }
 
@@ -2065,12 +2126,14 @@ async function toggleMic() {
     stopMic();
     return;
   }
+  if (state.micStarting) return; // 빠른 더블탭으로 getUserMedia 가 두 번 떠 스트림이 새는 것을 막는다
 
   if (!navigator.mediaDevices?.getUserMedia) {
     elements.listenStatus.textContent = "이 브라우저는 마이크 입력을 지원하지 않습니다.";
     return;
   }
 
+  state.micStarting = true;
   try {
     const context = ensureAudioContext();
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -2092,6 +2155,8 @@ async function toggleMic() {
     renderPractice();
   } catch {
     elements.listenStatus.textContent = "마이크 권한을 받을 수 없습니다. 브라우저 설정을 확인해 주세요.";
+  } finally {
+    state.micStarting = false;
   }
 }
 
@@ -2133,6 +2198,10 @@ async function toggleMidi() {
 
   try {
     state.midiAccess = await navigator.requestMIDIAccess();
+    // 권한 허용 후 키보드를 꽂는 흐름을 위해, 포트가 바뀌면 입력을 다시 배선한다.
+    state.midiAccess.onstatechange = () => {
+      if (state.midiActive) setMidiActive(true);
+    };
     setMidiActive(true);
     elements.listenStatus.textContent = "MIDI 키보드가 연결되었습니다.";
   } catch {
@@ -2157,7 +2226,7 @@ function handleMidiMessage(message) {
   const pitch = CHROMATIC[midiNote % 12];
   const octave = Math.floor(midiNote / 12) - 1;
   const note = `${pitch}${octave}`;
-  if (isPlayable(note)) handleDetectedNote(note);
+  if (isPlayable(note)) handleDetectedNote(note, "midi");
 }
 
 function parseScore(scoreText) {
@@ -2177,7 +2246,7 @@ function parseScore(scoreText) {
     }
 
     const durationMatch = token.match(/[:/](\d+(?:\.\d+)?)$/);
-    const duration = durationMatch ? Number(durationMatch[1]) : 1;
+    const duration = durationMatch ? Math.min(8, Number(durationMatch[1]) || 1) : 1;
     const noteToken = durationMatch ? token.slice(0, durationMatch.index) : token;
     const parsed = parseNoteToken(noteToken, 4);
     if (!parsed) return [];
@@ -2300,7 +2369,11 @@ function saveProgress() {
     warmupDrillIndex: state.warmupDrillIndex,
     warmupReturn: state.warmupReturn,
   };
-  localStorage.setItem("little-piano-progress", JSON.stringify(progress));
+  try {
+    localStorage.setItem("little-piano-progress", JSON.stringify(progress));
+  } catch {
+    // 저장 공간 초과/비활성(사파리 비공개 모드 등) — 진행 흐름은 막지 않는다.
+  }
 }
 
 function loadProgress() {
@@ -2315,8 +2388,10 @@ function loadProgress() {
     state.streak = progress.streak || 0;
     state.tempo = progress.tempo || 88;
     state.stageMode = progress.stageMode || "teach";
-    state.customSong = progress.customSong || null;
-    state.reviewSong = progress.reviewSong || null;
+    // 구버전/손상된 곡 객체(melody 배열 없음)가 복원돼 init()이 크래시하지 않도록 검증.
+    const validSong = (s) => (s && Array.isArray(s.melody) ? s : null);
+    state.customSong = validSong(progress.customSong);
+    state.reviewSong = validSong(progress.reviewSong);
     state.mistakes = progress.mistakes || {};
     state.fingerMistakes = progress.fingerMistakes || {};
     state.focusMode = Boolean(progress.focusMode);
@@ -2338,7 +2413,7 @@ function loadProgress() {
     state.rhythmActive = false;
     state.countInActive = false;
     state.metronomeActive = false;
-    state.warmupSong = progress.warmupSong || null;
+    state.warmupSong = validSong(progress.warmupSong);
     state.warmupDrillIndex = Number(progress.warmupDrillIndex) || 0;
     state.warmupReturn = progress.warmupReturn || null;
     if (state.selectedSongId === "warmup" && !state.warmupSong) {
@@ -2436,6 +2511,15 @@ function bindEvents() {
     handleNotePress(key.dataset.note);
   });
 
+  // 키보드 사용자: 건반에 Tab으로 이동 후 Enter/Space로 연주.
+  elements.keyboard.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const key = event.target.closest?.("[data-note]");
+    if (!key) return;
+    event.preventDefault();
+    handleNotePress(key.dataset.note);
+  });
+
   elements.playGuideButton.addEventListener("click", playGuide);
   elements.repeatButton.addEventListener("click", restartStep);
   elements.nextButton.addEventListener("click", nextStep);
@@ -2498,6 +2582,12 @@ function bindEvents() {
   });
 
   window.addEventListener("keydown", (event) => {
+    if (state.view !== "play") return;
+    if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+    const target = event.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+      return;
+    }
     const desktopMap = {
       a: "C4",
       s: "D4",
@@ -2514,7 +2604,10 @@ function bindEvents() {
       u: "A#4",
     };
     const note = desktopMap[event.key.toLowerCase()];
-    if (note) handleNotePress(note);
+    if (note) {
+      event.preventDefault();
+      handleNotePress(note);
+    }
   });
 }
 
