@@ -374,6 +374,7 @@ const state = {
   reviewSong: null,
   mistakes: {},
   fingerMistakes: {},
+  view: "home",
   focusMode: false,
   theme: "pop",
   soundStyle: "soft",
@@ -416,6 +417,7 @@ const elements = {
   streakCount: document.querySelector("#streakCount"),
   levelLabel: document.querySelector("#levelLabel"),
   currentSongTitle: document.querySelector("#currentSongTitle"),
+  homeSongLabel: document.querySelector("#homeSongLabel"),
   handBadge: document.querySelector("#handBadge"),
   fingerBadge: document.querySelector("#fingerBadge"),
   beatBadge: document.querySelector("#beatBadge"),
@@ -771,6 +773,10 @@ function renderPractice() {
   elements.scoreCount.textContent = state.score;
   elements.streakCount.textContent = state.streak;
   elements.levelLabel.textContent = state.level;
+  if (elements.homeSongLabel) {
+    const homeSong = getCurrentSong();
+    elements.homeSongLabel.textContent = `${homeSong?.title || "연습"} · ${level.title}`;
+  }
   elements.progressFill.style.width = `${progress}%`;
   elements.tempoValue.textContent = state.tempo;
   elements.tempoSlider.value = state.tempo;
@@ -917,7 +923,8 @@ function renderKeyboard() {
     ${whiteNotes
       .map(
         (note) => `
-          <button class="white-key" type="button" data-note="${note}" style="${noteColorStyle(note)}">
+          <button class="white-key" type="button" data-note="${note}" style="${noteColorStyle(note)}; --key-finger-color: ${fingerColorFor(fingerFor(note, "right"))}">
+            <span class="key-finger" aria-hidden="true">${fingerFor(note, "right")}</span>
             <span class="key-color" aria-hidden="true"></span>
             <span class="key-name">${plainSolfege(note)}</span>
             <span class="key-note">${note}</span>
@@ -2370,7 +2377,36 @@ function resetProgress() {
   renderSequencePreview();
 }
 
+function showView(name) {
+  state.view = name;
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.toggle("active", view.dataset.view === name);
+  });
+  if (document.body) {
+    document.body.dataset.view = name;
+  }
+  window.scrollTo?.({ top: 0, behavior: "smooth" });
+  if (name === "play") {
+    renderPractice();
+    renderStageTrack();
+    updateKeyHighlights();
+  } else if (name === "songs") {
+    renderSequencePreview();
+  } else if (name === "mission") {
+    renderMissions();
+    renderMistakes();
+    renderSuggestion();
+    renderDailyPractice();
+  } else if (name === "report") {
+    renderParentReport();
+  }
+}
+
 function bindEvents() {
+  document.querySelectorAll("[data-go]").forEach((button) => {
+    button.addEventListener("click", () => showView(button.dataset.go));
+  });
+
   elements.songList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-song-id]");
     if (!button) return;
@@ -2499,6 +2535,7 @@ function init() {
   renderPractice();
   renderSequencePreview();
   startDailyTicker();
+  showView("home");
 }
 
 init();

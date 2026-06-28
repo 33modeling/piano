@@ -1695,3 +1695,228 @@ body.focus-mode .target-note strong {
     flex: 1 1 0;
   }
 }
+
+/* ============================================================
+   화면 전환 (메인 메뉴 → 세부 기능 → 되돌아가기)
+   ============================================================ */
+.view {
+  display: none;
+}
+.view.active {
+  display: block;
+  animation: view-in 180ms ease;
+}
+.view-play.active {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.view-head h2 {
+  margin: 0;
+  flex: 1;
+  font-size: 1.4rem;
+}
+.view-head .ghost-button {
+  flex: 0 0 auto;
+}
+.back-button {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.back-button:active {
+  transform: translateY(1px);
+}
+.view-body {
+  display: grid;
+  gap: 16px;
+}
+
+/* ============================================================
+   메인 메뉴
+   ============================================================ */
+.play-hero {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 10px 0 18px;
+  padding: 24px 22px;
+  border: none;
+  border-radius: 26px;
+  background: linear-gradient(135deg, var(--coral), var(--blue));
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.play-hero:active {
+  transform: translateY(2px);
+}
+.play-hero-icon {
+  flex: 0 0 auto;
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.26);
+  font-size: 1.9rem;
+}
+.play-hero-text {
+  display: grid;
+  gap: 4px;
+}
+.play-hero-text strong {
+  font-size: 2.1rem;
+  line-height: 1.05;
+}
+.play-hero-text span {
+  font-size: 1rem;
+  font-weight: 700;
+  opacity: 0.94;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 116px;
+  padding: 18px 16px;
+  border: 2px solid var(--line);
+  border-radius: 20px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.menu-card:active {
+  transform: translateY(2px);
+}
+.menu-emoji {
+  font-size: 2rem;
+}
+.menu-name {
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+.menu-card small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* ============================================================
+   연주하기 화면 (가이드 위 / 건반 아래)
+   ============================================================ */
+.play-guide {
+  display: grid;
+  gap: 14px;
+}
+.piano-dock {
+  margin-top: 4px;
+}
+.play-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.play-tools-link {
+  margin-left: auto;
+}
+
+/* 도구/진짜피아노 화면 블록 */
+.tool-block {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+/* ============================================================
+   가이드 계이름 색 = 건반 색 매칭
+   (무대 트랙의 모든 타일이 해당 건반과 같은 --note-color 를 보여줌)
+   ============================================================ */
+body.color-notes .sheet-note {
+  border-top: 7px solid var(--note-color);
+}
+body.color-notes .sheet-note:not(.current):not(.done) {
+  background: color-mix(in srgb, var(--note-color) 16%, var(--paper));
+}
+body.color-notes .sheet-note.current {
+  background: color-mix(in srgb, var(--note-color) 40%, var(--paper));
+  border-color: var(--note-color);
+}
+
+/* ============================================================
+   건반 오른손 손가락 번호 (엄지 = 1)
+   ============================================================ */
+.key-finger {
+  margin-top: 10px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--key-finger-color, #ff5f7e);
+  color: #111318;
+  font-size: 0.82rem;
+  font-weight: 900;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 5px rgba(32, 36, 42, 0.22);
+}
+
+/* ============================================================
+   반응형 / 접근성
+   ============================================================ */
+@media (max-width: 540px) {
+  .play-hero-text strong {
+    font-size: 1.8rem;
+  }
+  .menu-card {
+    min-height: 104px;
+  }
+  .view-head h2 {
+    font-size: 1.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view.active {
+    animation: none;
+  }
+}
