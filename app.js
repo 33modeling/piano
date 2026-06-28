@@ -260,11 +260,14 @@ const songs = [
     id: "snail-day",
     title: "달팽이의 하루",
     mark: "달",
-    range: "악보 입력",
+    range: "낮은 라~솔",
     key: "C",
     description: "작사 조원경 · 작곡 김진성",
-    needsScore: true,
-    melody: [],
+    // 라/시는 모두 가운데 도 아래의 낮은음(A3·B3). M2의 (아래)라 (아래)시와
+    // 동일한 악구가 M10에서 무표기로 반복되어 곡 전체에서 낮은음으로 통일된다.
+    melody: melody(
+      "E4 F4 G4 G4 F4 E4 D4 C4 | A3 B3 C4 C4 F4 G4 C4 E4 D4 | E4 F4 G4 G4 F4 E4 D4 C4 | A3 F4 E4 D4 B3 C4 | E4 G4 D4 G4 G4 F4 E4 D4 C4 | A3 C4 D4 C4 F4 E4 F4 D4 | E4 E4 G4 D4 D4 G4 G4 F4 E4 D4 C4 | A3 B3 C4 F4 E4 D4 C4 B3 D4 C4 | E4 F4 G4 G4 F4 E4 D4 C4 | A3 B3 C4 C4 F4 G4 C4 E4 D4 | E4 F4 G4 G4 F4 E4 D4 C4 | A3 F4 E4 D4 B3 C4 | A3 F4 E4 D4 B3 C4",
+    ),
   },
 ];
 
