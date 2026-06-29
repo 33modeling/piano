@@ -1847,6 +1847,34 @@ function updateKeyHighlights() {
       key.style?.removeProperty?.("--finger-color");
     }
   });
+  scrollCurrentKeyIntoView();
+}
+
+// 현재 칠 음의 건반이 가로 스크롤 영역 밖이면 가운데로 끌어온다.
+// (가로 모드에서 건반이 화면보다 넓어 현재 음이 안 보일 수 있어 특히 필요)
+function scrollCurrentKeyIntoView() {
+  const scroller = elements.keyboard?.closest?.(".keyboard-scroll");
+  if (!scroller || typeof scroller.scrollTo !== "function") return;
+  const note = state.sequence[state.currentIndex]?.notes?.[0]?.note;
+  if (!note) return;
+  const key = elements.keyboard.querySelector?.(`[data-note="${note}"]`);
+  if (!key || typeof key.offsetLeft !== "number") return;
+  // 레이아웃이 확정된 다음 프레임에서 위치를 읽어 정확히 가운데로 맞춘다.
+  const align = () => {
+    const keyLeft = key.offsetLeft;
+    const keyWidth = key.clientWidth || 0;
+    const viewLeft = scroller.scrollLeft || 0;
+    const viewWidth = scroller.clientWidth || 0;
+    if (keyLeft < viewLeft + 24 || keyLeft + keyWidth > viewLeft + viewWidth - 24) {
+      const left = Math.max(0, keyLeft - viewWidth / 2 + keyWidth / 2);
+      scroller.scrollTo({ left, behavior: "smooth" });
+    }
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(align);
+  } else {
+    align();
+  }
 }
 
 function ensureAudioContext() {

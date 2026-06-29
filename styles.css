@@ -1941,3 +1941,108 @@ body[data-theme="night"] .hand-card {
     box-shadow: var(--shadow);
   }
 }
+
+/* ============================================================
+   가로 모드 (안드로이드 가로 고정)
+   연주 화면: 계이름(왼쪽) + 건반(오른쪽)을 페이지 스크롤 없이
+   한 화면에 동시에. "위(계이름)가 안 보여 못 친다" 문제 해결.
+   ============================================================ */
+@media (orientation: landscape) {
+  .app-shell {
+    padding: 8px 12px;
+  }
+
+  /* 헤더(상단) / 가이드(좌) / 건반(우) 3구역 그리드 */
+  .view-play.active {
+    display: grid;
+    grid-template-columns: minmax(250px, 38%) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "head head"
+      "guide piano";
+    gap: 8px 12px;
+    height: 100vh;
+    height: calc(100dvh - 16px);
+    overflow: hidden;
+  }
+  .view-play .view-head {
+    grid-area: head;
+    margin-bottom: 0;
+  }
+  .view-play .play-guide {
+    grid-area: guide;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
+  }
+  .view-play .piano-dock {
+    grid-area: piano;
+    min-height: 0;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .view-play .piano-dock .keyboard-toolbar {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  /* 건반이 오른쪽 칸 높이를 꽉 채우게 */
+  .view-play .piano-dock .keyboard-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    padding: 4px 0 0;
+  }
+  .view-play .piano-dock .keyboard {
+    height: 100%;
+  }
+
+  /* 좁은 가이드 칸에 맞춰 카드/시각화 컴팩트 */
+  .view-play .prompt-card {
+    justify-content: flex-start;
+    min-height: 0;
+    padding: 12px;
+    gap: 10px;
+  }
+  .view-play .target-notes {
+    min-height: 0;
+  }
+  .view-play .target-note strong {
+    font-size: 2.6rem;
+  }
+  /* 좁은 가로 가이드 칸에서는 손 모양 시각화를 숨긴다
+     (손가락 번호는 배지와 건반 위 번호로 이미 안내됨) */
+  .view-play .hand-visualizer {
+    display: none;
+  }
+  .view-play .stage-panel {
+    margin-top: 8px;
+    padding-top: 10px;
+  }
+
+  /* 홈: 가로 폭 활용 — 메뉴 3열, 히어로 축소 */
+  .menu-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .menu-card {
+    min-height: 96px;
+  }
+  .play-hero {
+    margin: 6px 0 12px;
+    padding: 16px 18px;
+  }
+  .play-hero-icon {
+    width: 52px;
+    height: 52px;
+    font-size: 1.5rem;
+  }
+  .play-hero-text strong {
+    font-size: 1.7rem;
+  }
+  .topbar {
+    margin-bottom: 10px;
+  }
+}
