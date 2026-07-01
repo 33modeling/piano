@@ -8,6 +8,11 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def versionCodeOverride = project.findProperty("VERSION_CODE")
+def versionNameOverride = project.findProperty("VERSION_NAME")
+def releaseVersionCode = versionCodeOverride ? versionCodeOverride.toString().toInteger() : 1
+def releaseVersionName = versionNameOverride ? versionNameOverride.toString() : "0.0.0"
+
 android {
     namespace "com.modeling33.piano"
     compileSdk 35
@@ -16,8 +21,8 @@ android {
         applicationId "com.modeling33.piano"
         minSdk 23
         targetSdk 35
-        versionCode 1
-        versionName "1.0.0"
+        versionCode releaseVersionCode
+        versionName releaseVersionName
     }
 
     signingConfigs {

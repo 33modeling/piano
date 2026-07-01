@@ -2,3 +2,5 @@
 node_modules/
 dist/
 *.log
+android/keystore.properties
+android/*.jks
